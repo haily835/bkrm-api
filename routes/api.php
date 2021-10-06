@@ -37,25 +37,24 @@ Route::get('/employeeLogin', [AuthController::class, 'employeeLogin']);
 Route::resource('/barcodes', BarcodeController::class);
 
 // Protected routes
-Route::group(['middleware' => ['auth:sanctum']], function () {
-    Route::resource('stores', StoreController::class);
-    Route::resource('branches', BranchController::class);
-    Route::resource('products', ProductController::class);
-    Route::resource('product-prices', ProductPriceController::class);
-    Route::resource('employees', EmployeeController::class);
-    Route::resource('suppliers', SupplierController::class);
-    Route::resource('purchase-orders', PurchaseOrderController::class);
-    Route::resource('purchase-order-details', PurchaseOrderDetailController::class);
-    Route::resource('orders', OrderController::class);
-    Route::resource('invoices', InvoiceController::class);
-    Route::resource('order-details', OrderDetailController::class);
-    Route::resource('refunds', RefundController::class);
-    Route::resource('refund-details', RefundDetailController::class);
-    Route::resource('purchase-returns', PurchaseReturnController::class);
-    Route::resource('purchase-return-details', PurchaseReturnDetailController::class);
-    Route::resource('inventory-transactions', InventoryTransactionController::class);
-    Route::post('/logout', [AuthController::class, 'logout']);
-});
+// Route::group(['middleware' => ['auth:sanctum']], function () {});
+Route::resource('stores', StoreController::class);
+Route::resource('branches', BranchController::class);
+Route::resource('products', ProductController::class);
+Route::resource('product-prices', ProductPriceController::class);
+Route::resource('employees', EmployeeController::class);
+Route::resource('suppliers', SupplierController::class);
+Route::resource('purchase-orders', PurchaseOrderController::class);
+Route::resource('purchase-order-details', PurchaseOrderDetailController::class);
+Route::resource('orders', OrderController::class);
+Route::resource('invoices', InvoiceController::class);
+Route::resource('order-details', OrderDetailController::class);
+Route::resource('refunds', RefundController::class);
+Route::resource('refund-details', RefundDetailController::class);
+Route::resource('purchase-returns', PurchaseReturnController::class);
+Route::resource('purchase-return-details', PurchaseReturnDetailController::class);
+Route::resource('inventory-transactions', InventoryTransactionController::class);
+Route::post('/logout', [AuthController::class, 'logout']);
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
