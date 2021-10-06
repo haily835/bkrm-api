@@ -44,13 +44,11 @@ class StoreController extends Controller
             $image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
             $image->save();
 
-            $data['image'] = 'http://103.163.118.100/bkrm-api/' . $imagePath;
+            $data['image'] = 'http://103.163.118.100/bkrm-api/storage/app/public/' . $imagePath;
         } else {
-            $data['image'] = 'http://103.163.118.100/bkrm-api/storage/store-images/store-default.png';
+            $data['image'] = 'http://103.163.118.100/bkrm-api/storage/app/public/store-images/store-default.png';
         }
-
         return Store::create($data);
-        
     }
 
     /**
