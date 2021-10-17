@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Supplier;
+use App\Models\Store;
 use Illuminate\Http\Request;
 
 class SupplierController extends Controller
@@ -10,11 +11,14 @@ class SupplierController extends Controller
 
     public function index(Request $request)
     {
-        if (Store::where('store_id', $request['store_id'])->doesntExist()) {
-            return response()->json(['message' => 'store_id do not exist']);
+
+        $store_id = $request->query('store_id');
+
+        if (Store::where('id', $store_id)->doesntExist()) {
+            return response()->json(['message' => 'store_id do not exist'], 404);
         }
 
-        $store_id = $request['store_id'];
+        
         return Supplier::where('store_id', $store_id)->get();
     }
 

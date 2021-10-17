@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
+use App\Models\Store;
 use Illuminate\Http\Request;
 
 class BranchController extends Controller
@@ -14,7 +15,7 @@ class BranchController extends Controller
      */
     public function index(Request $request)
     {
-        $store_id = $request['store_id'];
+        $store_id = $request->query('store_id');
         return Branch::where('store_id', $store_id)->get();
     }
 

@@ -20,6 +20,8 @@ use App\Http\Controllers\PurchaseReturnController;
 use App\Http\Controllers\PurchaseReturnDetailController;
 use App\Http\Controllers\InventoryTransactionController;
 use App\Http\Controllers\BarcodeController;
+use Intervention\Image\Facades\Image;
+
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -32,30 +34,47 @@ use App\Http\Controllers\BarcodeController;
 */
 
 Route::post('/register', [AuthController::class, 'register']);
-Route::get('/ownerLogin', [AuthController::class, 'ownerLogin']);
-Route::get('/employeeLogin', [AuthController::class, 'employeeLogin']);
+Route::post('/ownerLogin', [AuthController::class, 'ownerLogin']);
+Route::post('/employeeLogin', [AuthController::class, 'employeeLogin']);
 Route::resource('/barcodes', BarcodeController::class);
+Route::post('/image-uploads', function(Request $request) {
+    if ($request['image']) {
+        $imagePath = $request['image']->store('images', 'public');
+
+        $image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
+        $image->save();
+
+        $path = 'http://103.163.118.100/bkrm-api/storage/app/public/' . $imagePath;
+        return response()->json(['message' => $path]);
+    }
+});
+
+// Route::middleware()->get('/ownerLogout', );
+
 
 // Protected routes
-// Route::group(['middleware' => ['auth:sanctum']], function () {});
-Route::resource('stores', StoreController::class);
-Route::resource('branches', BranchController::class);
-Route::resource('products', ProductController::class);
-Route::resource('product-prices', ProductPriceController::class);
-Route::resource('employees', EmployeeController::class);
-Route::resource('suppliers', SupplierController::class);
-Route::resource('purchase-orders', PurchaseOrderController::class);
-Route::resource('purchase-order-details', PurchaseOrderDetailController::class);
-Route::resource('orders', OrderController::class);
-Route::resource('invoices', InvoiceController::class);
-Route::resource('order-details', OrderDetailController::class);
-Route::resource('refunds', RefundController::class);
-Route::resource('refund-details', RefundDetailController::class);
-Route::resource('purchase-returns', PurchaseReturnController::class);
-Route::resource('purchase-return-details', PurchaseReturnDetailController::class);
-Route::resource('inventory-transactions', InventoryTransactionController::class);
-Route::post('/logout', [AuthController::class, 'logout']);
-
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
+Route::group(['middleware' => ['auth:sanctum']], function () {
+    
+    Route::resource('stores', StoreController::class);
+    Route::resource('branches', BranchController::class);
+    Route::resource('products', ProductController::class);
+    Route::resource('product-prices', ProductPriceController::class);
+    Route::resource('employees', EmployeeController::class);
+    Route::resource('suppliers', SupplierController::class);
+    Route::resource('purchase-orders', PurchaseOrderController::class);
+    Route::resource('purchase-order-details', PurchaseOrderDetailController::class);
+    Route::resource('orders', OrderController::class);
+    Route::resource('invoices', InvoiceController::class);
+    Route::resource('order-details', OrderDetailController::class);
+    Route::resource('refunds', RefundController::class);
+    Route::resource('refund-details', RefundDetailController::class);
+    Route::resource('purchase-returns', PurchaseReturnController::class);
+    Route::resource('purchase-return-details', PurchaseReturnDetailController::class);
+    Route::resource('inventory-transactions', InventoryTransactionController::class);
+    Route::post('/logout', function (Request $request) {
+        $request->user()->tokens()->delete();
+        return [
+            'message' => 'user log out'
+        ];
+    });
 });

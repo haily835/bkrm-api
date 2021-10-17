@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Models\Store;
 use App\Models\Employee;
 
 class EmployeeController extends Controller
@@ -14,7 +15,13 @@ class EmployeeController extends Controller
      */
     public function index(Request $request)
     {
-        $store_id = $request['store_id'];
+        $store_id = $request->query('store_id');
+
+        if (Store::where('id', $store_id)->doesntExist()) {
+            return response()->json(['message' => 'store_id do not exist'], 404);
+        }
+
+
         return Employee::where('store_id', $store_id)->get();
     }
 

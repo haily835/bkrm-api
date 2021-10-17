@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\PurchaseOrder;
+use App\Models\Store;
+use App\Models\Branch;
 use Illuminate\Http\Request;
 
 class PurchaseOrderController extends Controller
@@ -10,8 +12,16 @@ class PurchaseOrderController extends Controller
 
     public function index(Request $request)
     {
-        $store_id = $request['store_id'];
-        $branch_id = $request['branch_id'];
+        $store_id = $request->query('store_id');
+        $branch_id = $request->query('branch_id');
+
+        if (Store::where('id', $store_id)->doesntExist()) {
+            return response()->json(['message' => 'store_id do not exist'], 404);
+        }
+
+        if (Branch::where('id', $branch_id)->doesntExist()) {
+            return response()->json(['message' => 'branch_id do not exist'], 404);
+        }
         return PurchaseOrder::where('store_id', $store_id)
                             ->where('branch_id', $branch_id)->get();
     }
@@ -72,17 +82,17 @@ class PurchaseOrderController extends Controller
     {
         $request->validate([
             'supplier_id' => 'required|numeric',
-            'created_by' => 'required|numeric',
-            'approved_by' => 'required|numeric',
+            'branch_id' => 'required|numeric',
             'store_id' => 'required|numeric',
-            'creation_date' => 'required|date_format:Y-m-d',
+            'created_by' => 'required|numeric',
+            'creation_date' => 'nullable|date_format:Y-m-d',
+            'approved_by' => 'nullable|numeric',
             'approved_date' => 'nullable|date_format:Y-m-d',
             'payment_date' => 'nullable|date_format:Y-m-d',
-            'payment_amount' => 'required|numeric',
-            'payment_method' => 'string|nullable',
-            'notes' => 'string|nullable',
-            'status' => 'string|required',
-            'branch_id' => 'required|numeric'
+            'payment_amount' => 'nullable|numeric',
+            'payment_method' => 'nullable|string',
+            'notes' => 'nullable|string',
+            'status' => 'nullable|string|in:new,submitted,approved,closed',
         ]);
 
         if (Store::where('id', $request['store_id'])->doesntExist()) {

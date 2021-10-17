@@ -3,14 +3,25 @@
 namespace App\Http\Controllers;
 
 use App\Models\Refund;
+use App\Models\Store;
+use App\Models\Branch;
 use Illuminate\Http\Request;
 
 class RefundController extends Controller
 {
     public function index(Request $request)
     {
-        $store_id = $request['store_id'];
-        $branch_id = $request['branch_id'];
+        $store_id = $request->query('store_id');
+        $branch_id = $request->query('branch_id');
+
+        if (Store::where('id', $store_id)->doesntExist()) {
+            return response()->json(['message' => 'store_id do not exist'], 404);
+        }
+
+        if (Branch::where('id', $branch_id)->doesntExist()) {
+            return response()->json(['message' => 'branch_id do not exist'], 404);
+        }
+        
         return Refund::where('store_id', $store_id)
                 ->where('branch_id', $branch_id)->get();
     }

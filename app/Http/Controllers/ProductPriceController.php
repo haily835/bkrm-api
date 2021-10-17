@@ -3,14 +3,25 @@
 namespace App\Http\Controllers;
 
 use App\Models\ProductPrice;
+use App\Models\Store;
+use App\Models\Product;
 use Illuminate\Http\Request;
 
 class ProductPriceController extends Controller
 {
     public function index(Request $request)
     {
-        $store_id = $request['store_id'];
-        $product_id = $request['product_id'];
+        $store_id = $request->query('store_id');
+        $product_id = $request->query('product_id');
+
+        if (Store::where('id', $store_id)->doesntExist()) {
+            return response()->json(['message' => 'store_id do not exist'], 404);
+        }
+
+        if (Product::where('id', $product_id)->doesntExist()) {
+            return response()->json(['message' => 'product_id do not exist'], 404);
+        }
+
         return ProductPrice::where('store_id', $store_id)
             ->where('product_id', $product_id)->get();
     }

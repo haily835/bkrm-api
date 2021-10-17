@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Product;
+use App\Models\Store;
 use Intervention\Image\Facades\Image;
 
 class ProductController extends Controller
@@ -15,12 +16,12 @@ class ProductController extends Controller
      */
     public function index(Request $request)
     {
-        if (Store::where('store_id', $request['store_id'])->doesntExist()) {
-            return response()->json(['message' => 'store_id do not exist']);
+        $store_id = $request->query('store_id');
+        if (Store::where('id', $store_id)->doesntExist()) {
+            return response()->json(['message' => 'store_id do not exist'], 404);
         }
 
-        $store_id = $request['store_id'];
-            return Product::where('store_id', $store_id)->get();
+        return Product::where('store_id', $store_id)->get();
     }
 
     /**
@@ -65,7 +66,7 @@ class ProductController extends Controller
 
         } else {
             $data['image'] = 'http://103.163.118.100/bkrm-api/storage/app/public/' 
-                                    . 'storage/store-images/store-default.png';
+                                    . 'storage/product-images/product-default.png';
         }
 
         return Product::create($data);
@@ -138,4 +139,5 @@ class ProductController extends Controller
         return Product::destroy($product->id);
     }
 
+    
 }

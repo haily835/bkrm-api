@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Store;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Intervention\Image\Facades\Image;
 
@@ -13,9 +14,15 @@ class StoreController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function index()
+    public function index(Request $request)
     {
-        Store::all();
+        $user_id = $request->query('user_id');
+
+        if (User::where('id', $user_id)->doesntExist()) {
+            return response()->json(['message' => 'user_id do not exist'], 404);
+        }
+
+        return Store::where('user_id', $user_id)->get();
     }
 
     /**
@@ -57,9 +64,9 @@ class StoreController extends Controller
      * @param  int  $id
      * @return \Illuminate\Http\Response
      */
-    public function show($id)
+    public function show(Request $request)
     {
-        return Store::find($id);
+        
     }
 
     /**
@@ -74,7 +81,7 @@ class StoreController extends Controller
         $store = Store::find($id);
 
         $data = $request->validate([
-            'name' => 'required|unique:stores,name',
+            'name' => 'nullable|unique:stores,name',
             'user_id' => 'required|numeric',
             'address' => 'required',
             'ward' => 'required',

@@ -97,11 +97,11 @@ class AuthController extends Controller
         return response($response, 201);
     }
 
-    public function logout(Request $request) {
-        auth()->user()->tokens()->delete();
+    // public function logout(Request $request) {
+    //     auth()->user()->tokens()->delete();
 
-        return [
-            'message' => 'Logged out'
-        ];
-    }
+    //     return [
+    //         'message' => 'Logged out'
+    //     ];
+    // }
 }
