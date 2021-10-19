@@ -36,14 +36,13 @@ class EmployeeController extends Controller
             'gender' => $fields['gender'] ? $fields['gender'] : null,
         ];
 
-        $store_id->employees()->create($employee);
+        $store->employees()->create($employee);
 
         return response()->json([
             'message' => 'Employee created sucessfully',
             'data' => $employee,
         ]);
     }
-
 
     public function update(Employee $employee)
     {
