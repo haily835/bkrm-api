@@ -1,12 +1,12 @@
 <?php
 
 namespace App\Http\Controllers;
+use Illuminate\Http\Request;
 
+use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\Employee;
-use Illuminate\Http\Request;
-use Illuminate\Http\Response;
-use Illuminate\Support\Facades\Hash;
+use Validator;
 
 class AuthController extends Controller
 {
@@ -15,10 +15,10 @@ class AuthController extends Controller
             'name' => 'required|string',
             'email' => 'required|string|unique:users,email',
             'password' => 'required|string|confirmed',
-            'phone' => 'required',
-            'date_of_birth' => 'required|date_format:Y-m-d',
-            'status' =>'required|in:active,inactive',
-            'gender' => 'required|in:male,female',
+            'phone' => 'required|unique:users',
+            'date_of_birth' => 'nullable|date_format:Y-m-d',
+            'status' =>'nullable|in:active,inactive',
+            'gender' => 'nullable|in:male,female',
         ]);
 
         $user = User::create([
@@ -26,82 +26,78 @@ class AuthController extends Controller
             'email' => $fields['email'],
             'password' => bcrypt($fields['password']),
             'phone' => $fields['phone'],
-            'date_of_birth' => $fields['date_of_birth'],
-            'status' => $fields['status'],
-            'gender' => $fields['gender'],
+            'date_of_birth' => $fields['date_of_birth'] ? $fields['date_of_birth'] : null,
+            'status' => $fields['status'] ? $fields['status'] : "active",
+            'gender' => $fields['gender'] ? $fields['gender'] : null,
         ]);
 
-        $token = $user->createToken('myapptoken')->plainTextToken;
-
-        $response = [
-            'user' => $user,
-            'api_token' => $token
-        ];
-
-        return response($response, 201);
+        return response()->json([
+            'message' => 'User successfully registered',
+            'user' => $user
+        ], 201);
     }
 
     public function ownerLogin(Request $request) {
-        $fields = $request->validate([
-            'email' => 'required|string',
+        $validator = Validator::make($request->all(), [
+            'phone' => 'required|string',
             'password' => 'required|string'
         ]);
 
-        // Check email
-        $user = User::where('email', $fields['email'])->first();
-
-        // Check password
-        if(!$user || !Hash::check($fields['password'], $user->password)) {
-            return response([
-                'message' => 'Bad creds'
-            ], 401);
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 422);
         }
 
-        $token = $user->createToken('myapptoken')->plainTextToken;
+        if (! $token = auth()->attempt($validator->validated())) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
 
-        $response = [
-            'user_id' => $user->id,
-            'user_name' => $user->name,
-            'icon' => "storage/user-male.png",
-            'api_token' => $token
-        ];
-
-        return response($response, 201);
+        return $this->createNewToken($token);
     }
 
     public function employeeLogin(Request $request) {
-        $fields = $request->validate([
-            'email' => 'required|string',
+        
+        $validator = Validator::make($request->all(), [
+            'phone' => 'required|string',
             'password' => 'required|string',
             'store_id' => 'required|numeric',
         ]);
 
-        $employee = Employee::where('store_id', $fields['store_id'])
-                            ->where('email', $fields['email'])->first();
-        
-        // Check password
-        if(!$employee || !Hash::check($fields['password'], $employee->password)) {
-            return response([
-                'message' => 'Bad creds'
-            ], 401);
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 422);
         }
 
-        $token = $employee->createToken('myapptoken')->plainTextToken;
+        if (! $token = Auth::guard('employee')->attempt($validator->validated())) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
 
-        $response = [
-            'employee_id' => $employee->id,
-            'name' => $employee->name,
-            'api_token' => $token,
-        ];
-
-        return response($response, 201);
+        return $this->createNewEmpToken($token);
     }
 
-    // public function logout(Request $request) {
-    //     auth()->user()->tokens()->delete();
+    protected function createNewToken($token){
+        return response()->json([
+            'access_token' => $token,
+            'token_type' => 'bearer',
+            'expires_in' => auth()->factory()->getTTL() * 60,
+            'user' => Auth::guard('user')->user()
+        ]);
+    }
 
-    //     return [
-    //         'message' => 'Logged out'
-    //     ];
-    // }
+    protected function createNewEmpToken($token){
+        return response()->json([
+            'access_token' => $token,
+            'token_type' => 'bearer',
+            'expires_in' => auth()->factory()->getTTL() * 60,
+            'user' => Auth::guard('employee')->user()
+        ]);
+    }
+
+    public function refresh() {
+        return $this->createNewToken(auth()->refresh());
+    }
+
+    public function logout() {
+        auth()->logout();
+
+        return response()->json(['message' => 'User successfully signed out']);
+    }
 }

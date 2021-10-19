@@ -3,17 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Store;
+use App\Models\Employee;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Intervention\Image\Facades\Image;
 
 class StoreController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
     public function index(Request $request)
     {
         $user_id = $request->query('user_id');
@@ -25,24 +21,18 @@ class StoreController extends Controller
         return Store::where('user_id', $user_id)->get();
     }
 
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
     public function store(Request $request)
     {
         $data = $request->validate([
             'name' => 'required|unique:stores',
             'user_id' => 'required|numeric',
-            'address' => 'required',
-            'ward' => 'required',
-            'city' => 'required',
-            'province' => 'required',
-            'phone' => 'required',
+            'address' => 'required|string',
+            'ward' => 'required|string',
+            'city' => 'required|string',
+            'province' => 'required|string',
+            'phone' => 'required|string',
             'status' => 'required|in:active,inactive',
-            'image' => '',
+            'image' => 'nullable|image',
         ]);
 
         if ($request['image']) {
@@ -55,41 +45,26 @@ class StoreController extends Controller
         } else {
             $data['image'] = 'http://103.163.118.100/bkrm-api/storage/app/public/store-images/store-default.png';
         }
-        return Store::create($data);
+
+        $store = Store::create($data);
+
+        return response()->json([
+            'message' => 'Store created successfully',
+            'store' => $store,
+        ], 200);
     }
 
-    /**
-     * Display the specified resource.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function show(Request $request)
+    public function update(Request $request, Store $store)
     {
-        
-    }
-
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function update(Request $request, $id)
-    {
-        $store = Store::find($id);
-
         $data = $request->validate([
             'name' => 'nullable|unique:stores,name',
-            'user_id' => 'required|numeric',
-            'address' => 'required',
-            'ward' => 'required',
-            'city' => 'required',
-            'province' => 'required',
-            'phone' => 'required',
-            'status' => 'required|in:active,inactive',
-            'image'=> '',
+            'address' => 'nullable|string',
+            'ward' => 'nullable|string',
+            'city' => 'nullable|string',
+            'province' => 'nullable|string',
+            'phone' => 'nullable|string',
+            'status' => 'nullable|string|in:active,inactive',
+            'image'=> 'nullable|image',
         ]);
 
         if ($request['image']) {
@@ -107,18 +82,8 @@ class StoreController extends Controller
         return $store;
     }
 
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
-    public function destroy($id)
+    public function destroy(Store $store)
     {
-        return Store::destroy($id);
-    }
-
-    public function getStoreOfUser($user_id) {
-        return Store::where('user_id', '=', $user_id)->get();
+        return Store::destroy($store->id);
     }
 }

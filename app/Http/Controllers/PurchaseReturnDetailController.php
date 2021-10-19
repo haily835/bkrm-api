@@ -10,108 +10,50 @@ use Illuminate\Http\Request;
 
 class PurchaseReturnDetailController extends Controller
 {
-
-    public function index(Request $request)
+    public function index(Store $store, Branch $branch, PurchaseReturn $purchaseReturn)
     {
-        $store_id = $request->query('store_id');
-        $branch_id = $request->query('branch_id');
-        $purchase_return_id = $request->query('purchase_return_id');
-
-        if (Store::where('id', $store_id)->doesntExist()) {
-            return response()->json(['message' => 'store_id do not exist'], 404);
-        }
-
-        if (Branch::where('id', $branch_id)->doesntExist()) {
-            return response()->json(['message' => 'branch_id do not exist'], 404);
-        }
-
-        if (PurchaseReturn::where('id', $purchase_return_id)->doesntExist()) {
-            return response()->json(['message' => 'purchase_return_id do not exist'], 404);
-        }
-       
-        return PurchaseReturnDetail::where('store_id', $store_id)
-                    ->where('branch_id', $branch_id)
-                    ->where('purchase_return_id', $purchase_return_id)->get();
+        return response()->json([
+            'data' => $purchaseReturn->purchaseReturnDetails,
+        ], 200);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
-    public function store(Request $request)
+    public function store(Request $request, Store $store, Branch $branch, PurchaseReturn $purchaseReturn)
     {
-        $request->validate([
-            'purchase_return_id' => 'required|numeric',
+        $validated = $request->validate([
             'product_id' => 'required|numeric',
-            'store_id' => 'required|numeric',
-            'branch_id' => 'required|numeric',
-            'inventory_transaction_id' => 'nullable|numeric',
             'quantity' => 'required|numeric',
             'unit_cost' => 'required|numeric',
-            'reason' => 'nullable|string',
+            'removed_from_inventory' => 'nullable|boolean',
         ]);
 
-        if (Store::where('id', $request['store_id'])->doesntExist()) {
-            return response()->json(['message' => 'store_id do not exist']);
-        }
-        
-        if (Branch::where('id', $request['branch_id'])->doesntExist()) {
-            return response()->json(['message' => 'branch_id do not exist']);
-        }
+        $purchaseReturnDetail = PurchaseReturnDetail::create(array_merge($validated, [
+            'store_id' => $store->id,
+            'branch_id' => $branch->id,
+            'purchase_return_id' => $purchaseReturn->id,
+        ]));
 
-        if (PurchaseReturn::where('id', $request['purchase_return_id'])->doesntExist()) {
-            return response()->json(['message' => 'purchase_return_id do not exist']);
-        }
-
-        return PurchaseReturnDetail::create($request->all());
+        return response()->json([
+            'data' => $purchaseReturnDetail,
+        ], 200);
     }
 
-    /**
-     * Display the specified resource.
-     *
-     * @param  \App\Models\PurchaseReturnDetail  $purchaseReturnDetail
-     * @return \Illuminate\Http\Response
-     */
-    public function show(PurchaseReturnDetail $purchaseReturnDetail)
+    public function update(Request $request, PurchaseReturn $purchaseReturn, PurchaseReturnDetail $purchaseReturnDetail)
     {
-        return $purchaseReturnDetail;
-    }
-
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\PurchaseReturnDetail  $purchaseReturnDetail
-     * @return \Illuminate\Http\Response
-     */
-    public function update(Request $request, PurchaseReturnDetail $purchaseReturnDetail)
-    {
-        $request->validate([
-            'purchase_return_id' => 'required|numeric',
-            'product_id' => 'required|numeric',
-            'store_id' => 'required|numeric',
-            'branch_id' => 'required|numeric',
-            'inventory_transaction_id' => 'nullable|numeric',
+        $validated = $request->validate([
             'quantity' => 'nullable|numeric',
-            'unit_cost' => 'nullable|numeric',
-            'reason' => 'nullable|string',
+            'unit_price' => 'nullable|numeric',
+            'removed_from_inventory' => 'nullable|boolean',
         ]);
 
-        // changing the inventory transaction 
+        $purchaseReturnDetail->update($validated);
 
 
-        return $purchaseReturnDetail->update($request->all());
+        return response()->json([
+            'data' => $purchaseReturnDetail
+        ], 200);
     }
 
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param  \App\Models\PurchaseReturnDetail  $purchaseReturnDetail
-     * @return \Illuminate\Http\Response
-     */
-    public function destroy(PurchaseReturnDetail $purchaseReturnDetail)
+    public function destroy(PurchaseReturn $purchaseReturn, PurchaseReturnDetail $purchaseReturnDetail)
     {
         return PurchaseReturnDetail::destroy($purchaseReturnDetail->id);
     }

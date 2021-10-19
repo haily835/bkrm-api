@@ -8,73 +8,63 @@ use App\Models\Employee;
 
 class EmployeeController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function index(Request $request)
+    public function index(Store $store)
     {
-        $store_id = $request->query('store_id');
-
-        if (Store::where('id', $store_id)->doesntExist()) {
-            return response()->json(['message' => 'store_id do not exist'], 404);
-        }
-
-
-        return Employee::where('store_id', $store_id)->get();
+        return $store->employees;
     }
 
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
-    public function store(Request $request)
+    public function store(Request $request, Store $store)
     {
         $fields = $request->validate([
-            'store_id' => 'required|numeric',
             'name' => 'required|string',
             'email' => 'required|string|unique:employees,email',
             'password' => 'required|string|confirmed',
-            'phone' => 'required',
-            'date_of_birth' => 'required|date_format:Y-m-d',
-            'status' =>'required|in:active,inactive',
-            'gender' => 'required|in:male,female',
+            'phone' => 'required|string|unique:employees',
+            'date_of_birth' => 'nullable|date_format:Y-m-d',
+            'status' =>'nullable|in:active,inactive',
+            'gender' => 'nullable|in:male,female',
         ]);
 
-        return $employee = Employee::create([
+        $employee = [
+            'username' => $fields['name'],
             'name' => $fields['name'],
             'email' => $fields['email'],
-            'store_id' => $fields['store_id'],
             'password' => bcrypt($fields['password']),
             'phone' => $fields['phone'],
-            'date_of_birth' => $fields['date_of_birth'],
-            'status' => $fields['status'],
-            'gender' => $fields['gender'],
+            'date_of_birth' => $fields['date_of_birth'] ? $fields['date_of_birth'] : null,
+            'status' => $fields['status'] ?  $fields['status'] : null,
+            'gender' => $fields['gender'] ? $fields['gender'] : null,
+        ];
+
+        $store_id->employees()->create($employee);
+
+        return response()->json([
+            'message' => 'Employee created sucessfully',
+            'data' => $employee,
+        ]);
+    }
+
+
+    public function update(Employee $employee)
+    {
+        $fields = $request->validate([
+            'name' => 'nullable|string',
+            'email' => 'nullable|string|unique:employees,email',
+            'password' => 'nullable|string|confirmed',
+            'phone' => 'nullable|string|unique:employees',
+            'date_of_birth' => 'nullable|date_format:Y-m-d',
+            'status' =>'nullable|in:active,inactive',
+            'gender' => 'nullable|in:male,female',
         ]);
 
+        $employee->update($fields);
+
+        return response()->json([
+            'message' => 'Employee updated sucessfully',
+            'data' => $employee,
+        ]);
     }
 
-
-    public function show(Employee $employee)
-    {
-        return $employee;
-    }
-
-    public function update(Request $request, Employee $employee)
-    {
-        $employee->update($request->all());
-        return $employee;
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param  int  $id
-     * @return \Illuminate\Http\Response
-     */
     public function destroy(Employee $employee)
     {
         return Employee::destroy($employee->id);

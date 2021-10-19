@@ -10,116 +10,46 @@ use Illuminate\Http\Request;
 
 class RefundDetailController extends Controller
 {
-    public function index(Request $request)
+    public function index(Store $store, Branch $branch, Refund $refund)
     {
-        $store_id = $request->query('store_id');
-        $branch_id = $request->query('branch_id');
-        $refund_id = $request->query('refund_id');
-
-        if (Store::where('id', $store_id)->doesntExist()) {
-            return response()->json(['message' => 'store_id do not exist'], 404);
-        }
-
-        if (Branch::where('id', $branch_id)->doesntExist()) {
-            return response()->json(['message' => 'branch_id do not exist'], 404);
-        }
-
-        if (Refund::where('id', $refund_id)->doesntExist()) {
-            return response()->json(['message' => 'refund_id do not exist'], 404);
-        }
-        return RefundDetail::where('store_id', $store_id)
-                    ->where('branch_id', $branch_id)
-                    ->where('refund_id', $refund_id)->get();
+        return response()->json([
+            'data' => $refund->refundDetails,
+        ], 200);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
-    public function store(Request $request)
+    public function store(Request $request, Store $store, Branch $branch, Refund $refund)
     {
-        $request->validate([
-            'company' => 'required|string',
-            'refund_id' => 'required|numeric',
+        $validated = $request->validate([
             'product_id' => 'required|numeric',
-            'inventory_transaction_id' => 'nullable|numeric',
             'quantity' => 'required|numeric',
             'unit_price' => 'required|numeric',
-            'reason' => 'nullable|string',
-            'store_id' => 'required|numeric',
-            'branch_id' => 'required|numeric',
         ]);
 
-        if (Store::where('id', $request['store_id'])->doesntExist()) {
-            return response()->json(['message' => 'store_id do not exist']);
-        }
-        
-        if (Branch::where('id', $request['branch_id'])->doesntExist()) {
-            return response()->json(['message' => 'branch_id do not exist']);
-        }
+        $refundDetail = RefundDetail::create(array_merge($validated, [
+            'store_id' => $store->id,
+            'branch_id' => $branch->id,
+            'refund_id' => $refund->id,
+        ]));
 
-        if (Refund::where('id', $request['refund_id'])->doesntExist()) {
-            return response()->json(['message' => 'refund_id do not exist']);
-        }
-
-        return RefundDetail::create($request->all());
+        return response()->json([
+            'data' => $refundDetail,
+        ], 200);
     }
 
-    /**
-     * Display the specified resource.
-     *
-     * @param  \App\Models\RefundDetail  $refundDetail
-     * @return \Illuminate\Http\Response
-     */
-    public function show(RefundDetail $refundDetail)
-    {
-        return $refundDetail;
-    }
-
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\RefundDetail  $refundDetail
-     * @return \Illuminate\Http\Response
-     */
     public function update(Request $request, RefundDetail $refundDetail)
     {
-        $request->validate([
-            'company' => 'required|string',
-            'refund_id' => 'required|numeric',
-            'product_id' => 'required|numeric',
-            'inventory_transaction_id' => 'nullable|numeric',
-            'quantity' => 'required|numeric',
-            'unit_price' => 'required|numeric',
-            'reason' => 'nullable|string',
-            'store_id' => 'required|numeric',
-            'branch_id' => 'required|numeric',
+        $validated = $request->validate([
+            'quantity' => 'nullable|numeric',
+            'unit_price' => 'nullable|numeric',
         ]);
 
-        if (Store::where('id', $request['store_id'])->doesntExist()) {
-            return response()->json(['message' => 'store_id do not exist']);
-        }
-        
-        if (Branch::where('id', $request['branch_id'])->doesntExist()) {
-            return response()->json(['message' => 'branch_id do not exist']);
-        }
+        $refundDetail->update($validated);
 
-        if (Refund::where('id', $request['refund_id'])->doesntExist()) {
-            return response()->json(['message' => 'refund_id do not exist']);
-        }
-        
-        return $refundDetail->update($request->all());
+        return response()->json([
+            'data' => $refundDetail
+        ], 200);
     }
 
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param  \App\Models\RefundDetail  $refundDetail
-     * @return \Illuminate\Http\Response
-     */
     public function destroy(RefundDetail $refundDetail)
     {
         return RefundDetail::destroy($refundDetail->id);

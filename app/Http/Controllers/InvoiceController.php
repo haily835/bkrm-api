@@ -7,26 +7,11 @@ use Illuminate\Http\Request;
 
 class InvoiceController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, Store $store, Branch $branch)
     {
-        $store_id = $request->query('store_id');
-        $branch_id = $request->query('branch_id');
-        $order_id = $request->query('order_id');
-
-        if (Store::where('id', $store_id)->doesntExist()) {
-            return response()->json(['message' => 'store_id do not exist'], 404);
-        }
-
-        if (Branch::where('id', $branch_id)->doesntExist()) {
-            return response()->json(['message' => 'branch_id do not exist'], 404);
-        }
-
-        if (Order::where('id', $branch_id)->doesntExist()) {
-            return response()->json(['message' => 'order_id do not exist'], 404);
-        }
-        
-        return Invoice::where('store_id', $store_id)
-                    ->where('branch_id', $branch_id)->get();
+        return response()->json([
+            'data' => $branch->invoices
+        ], 200);
     }
 
     /**
@@ -35,32 +20,50 @@ class InvoiceController extends Controller
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function store(Request $request)
+    public function store(Request $request, Store $store, Branch $branch)
     {
-        return Invoice::create($request->all());
+        $validated = $request->validate([
+            'order_id' => "required|numeric",
+            'due_date' => "required|date_format:Y-m-d",
+            'tax' => "required|numeric",
+            'shipping' => 'required|numeric',
+            'amount_due' => 'required|numeric',
+            'discount' => 'required|numeric',
+        ]);
+
+        $invoice = array_merge($validated, [
+            'store_id' => $store->id,
+            'branch_id' => $branch->id
+        ]);
+        
+        Invoice::create($invoice);
+
+        return response()->json([
+            'message' => 'Invoice created',
+            'data' => $invoice,
+        ], 200);
     }
 
-    /**
-     * Display the specified resource.
-     *
-     * @param  \App\Models\Invoice  $invoice
-     * @return \Illuminate\Http\Response
-     */
     public function show(Invoice $invoice)
     {
         return $invoice;
     }
 
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Invoice  $invoice
-     * @return \Illuminate\Http\Response
-     */
     public function update(Request $request, Invoice $invoice)
     {
-        return $invoice->update($request->all());
+        $validated = $request->validate([
+            'due_date' => "nullable|date_format:Y-m-d",
+            'tax' => "nullable|numeric",
+            'shipping' => 'nullable|numeric',
+            'amount_due' => 'nullable|numeric',
+            'discount' => 'nullable|numeric',
+        ]);
+
+        
+        return response()->json([
+            'message' => 'Invoice created',
+            'data' => $invoice->update($validated),
+        ], 200);
     }
 
     /**

@@ -12,6 +12,5 @@ class PurchaseOrderDetail extends Model
 
     protected $casts = [
         'date_received' => 'datetime:Y-m-d',
-       
     ];
 }

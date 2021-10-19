@@ -10,6 +10,11 @@ class PurchaseOrder extends Model
     use HasFactory;
     protected $guarded = [];
 
+    public function purchaseOrderDetails()
+    {
+        return $this->hasMany(PurchaseOrderDetail::class);
+    }
+
     protected $casts = [
         'creation_date' => 'datetime:Y-m-d',
         'approved_date' => 'datetime:Y-m-d',

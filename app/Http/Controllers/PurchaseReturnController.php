@@ -9,68 +9,61 @@ use Illuminate\Http\Request;
 
 class PurchaseReturnController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     *
-     * @return \Illuminate\Http\Response
-     */
-    public function index(Request $request)
+    public function index(Store $store, Branch $branch)
     {
-        $store_id = $request->query('store_id');
-        $branch_id = $request->query('branch_id');
-
-        if (Store::where('id', $store_id)->doesntExist()) {
-            return response()->json(['message' => 'store_id do not exist'], 404);
-        }
-
-        if (Branch::where('id', $branch_id)->doesntExist()) {
-            return response()->json(['message' => 'branch_id do not exist'], 404);
-        }
-
-        return PurchaseReturn::where('store_id', $store_id)
-                            ->where('branch_id', $branch_id)->get();
+        return response()->json([
+            'data' => $branch->purchaseReturns,
+        ], 200);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
-    public function store(Request $request)
+    
+    public function store(Request $request, Store $store, Branch $branch)
     {
-        return PurchaseReturn::create($request->all());
-    }
+        $validated = $request->validate([
+            'supplier_id' => 'required|numeric',
+            'created_by' => 'required|numeric',
+            'creation_date' => 'required|date_format:Y-m-d',
+            'approved_by' => 'nullable|numeric',
+            'approved_date' => 'required|date_format:Y-m-d',
+            'payment_type' => 'nullable|string',
+            'return_amount' => 'nullable|numeric',
+            'notes' => 'nullable|text',
+        ]);
+        
+        $purchaseReturn = PurchaseReturn::create(array_merge(
+            [
+                'store_id' => $store->id,
+                'branch_id' => $branch->id,
+            ],
+            $validated
+        ));
 
-    /**
-     * Display the specified resource.
-     *
-     * @param  \App\Models\PurchaseReturn  $purchaseReturn
-     * @return \Illuminate\Http\Response
-     */
-    public function show(PurchaseReturn $purchaseReturn)
-    {
-        return $purchaseReturn;
-    }
 
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\PurchaseReturn  $purchaseReturn
-     * @return \Illuminate\Http\Response
-     */
+        return response()->json([
+            'message' => 'Purchase return created',
+            'data' => $purchaseReturn,
+        ], 200);
+    }
+    
     public function update(Request $request, PurchaseReturn $purchaseReturn)
     {
-        return $purchaseReturn->update($request->all());
+        $validated = $request->validate([
+            'supplier_id' => 'nullable|numeric',
+            'approved_by' => 'nullable|numeric',
+            'approved_date' => 'nullable|date_format:Y-m-d',
+            'payment_type' => 'nullable|string',
+            'return_amount' => 'nullable|numeric',
+            'notes' => 'nullable|text',
+        ]);
+
+        $purchaseReturn->update($validated);
+
+        return response()->json([
+            'message' => 'Purchase return updated',
+            'data' => $purchaseReturn,
+        ], 200);
     }
 
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param  \App\Models\PurchaseReturn  $purchaseReturn
-     * @return \Illuminate\Http\Response
-     */
     public function destroy(PurchaseReturn $purchaseReturn)
     {
         return PurchaseReturn::destroy($purchaseReturn);

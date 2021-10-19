@@ -9,55 +9,51 @@ use Illuminate\Http\Request;
 
 class ProductPriceController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, Store $store, Product $product)
     {
-        $store_id = $request->query('store_id');
-        $product_id = $request->query('product_id');
-
-        if (Store::where('id', $store_id)->doesntExist()) {
-            return response()->json(['message' => 'store_id do not exist'], 404);
-        }
-
-        if (Product::where('id', $product_id)->doesntExist()) {
-            return response()->json(['message' => 'product_id do not exist'], 404);
-        }
-
-        return ProductPrice::where('store_id', $store_id)
-            ->where('product_id', $product_id)->get();
+        return ProductPrice::where('store_id', $store->id)
+            ->where('product_id', $product->id)->get();
     }
 
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
-    public function store(Request $request)
+    public function store(Request $request, Store $store, Product $product)
     {
-        return ProductPrice::create($request->all());
+        $validated = $request->validate([
+            'price' => 'required|numeric',
+            'start_date' => 'required|datetime',
+            'end_date' => 'required|datetime',
+        ]);
+
+        $productPrice = array_merge([
+            'product_id' => $product->id,
+            'store_id' => $store->id,
+        ], $validated);
+
+        ProductPrice::create($productPrice);
+        return response()->json([
+            'message' => 'Product price create successfully',
+            'data' => $productPrice
+        ], 200);
     }
 
-    /**
-     * Display the specified resource.
-     *
-     * @param  \App\Models\ProductPrice  $productPrice
-     * @return \Illuminate\Http\Response
-     */
-    public function show(ProductPrice $productPrice)
+    public function update(Request $request, Store $store, Product $product, ProductPrice $productPrice)
     {
-        return $productPrice;
-    }
+        $validated = $request->validate([
+            'price' => 'nullable|numeric',
+            'start_date' => 'nullable|datetime',
+            'end_date' => 'nullable|datetime',
+        ]);
 
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\ProductPrice  $productPrice
-     * @return \Illuminate\Http\Response
-     */
-    public function update(Request $request, ProductPrice $productPrice)
-    {
-        return $productPrice->update($request->all());
+        $newProductPrice = array_merge([
+            'product_id' => $product->id,
+            'store_id' => $store->id,
+        ], $validated);
+
+        $productPrice->update($newProductPrice);
+
+        return response()->json([
+            'message' => 'Product price update successfully',
+            'data' => $productPrice
+        ], 200);
     }
 
     /**
@@ -66,7 +62,7 @@ class ProductPriceController extends Controller
      * @param  \App\Models\ProductPrice  $productPrice
      * @return \Illuminate\Http\Response
      */
-    public function destroy(ProductPrice $productPrice)
+    public function destroy(Store $store, Product $product, ProductPrice $productPrice)
     {
         return ProductPrice::destroy($productPrice->id);
     }

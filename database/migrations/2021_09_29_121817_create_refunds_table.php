@@ -17,6 +17,7 @@ class CreateRefundsTable extends Migration
             $table->id();
             $table->foreignId('user_id');
             $table->foreignId('customer_id');
+            $table->foreignId('order_id');
             $table->foreignId('invoice_id');
             $table->string('payment_type');
             $table->longText('notes')->nullable();
@@ -32,7 +33,7 @@ class CreateRefundsTable extends Migration
             $table->foreignId('product_id');
             $table->foreignId('inventory_transaction_id')->nullable();
             $table->double('quantity');
-            $table->double('unit_cost');
+            $table->double('unit_price');
             $table->string('reason')->nullable();
             $table->foreignId('store_id');
             $table->foreignId('branch_id');

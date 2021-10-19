@@ -9,17 +9,11 @@ use Illuminate\Http\Request;
 class SupplierController extends Controller
 {
 
-    public function index(Request $request)
+    public function index(Store $store)
     {
-
-        $store_id = $request->query('store_id');
-
-        if (Store::where('id', $store_id)->doesntExist()) {
-            return response()->json(['message' => 'store_id do not exist'], 404);
-        }
-
-        
-        return Supplier::where('store_id', $store_id)->get();
+        return response()->json([
+            'data' => $store->suppliers,
+        ], 200);
     }
 
     /**
@@ -28,12 +22,11 @@ class SupplierController extends Controller
      * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\Response
      */
-    public function store(Request $request)
+    public function store(Request $request, Store $store)
     {
-        $request->validate([
-            'company' => 'required|string',
-            'last_name' => 'nullable|string',
-            'first_name' => 'nullable|string',
+        $validated = $request->validate([
+            'company' => 'nullable|string',
+            'name' => 'required|string',
             'email' => 'nullable|string',
             'job_title' => 'nullable|string',
             'phone' => 'nullable|string',
@@ -41,39 +34,28 @@ class SupplierController extends Controller
             'ward' => 'nullable|string',
             'city' => 'nullable|string',
             'province' => 'nullable|string',
-            'payment_info' => 'required|in:active,inactive',
-            'store_id' => 'required|numeric',
+            'payment_info' => 'nullable|string',
         ]);
 
-        if (Store::where('id', $request['store_id'])->doesntExist()) {
-            return response()->json(['message' => 'store_id do not exist']);
-        }
+        $supplier = Supplier::create(array_merge(
+            ['store_id' => $store->id],
+            $validated
+        ));
 
-        return Supplier::create($request->all());
+        return response()->json([
+            'data' => $supplier
+        ], 200);
     }
 
-    /**
-     * Display the specified resource.
-     *
-     * @param  \App\Models\Supplier  $supplier
-     * @return \Illuminate\Http\Response
-     */
     public function show(Supplier $supplier)
     {
         return $supplier;
     }
 
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\Supplier  $supplier
-     * @return \Illuminate\Http\Response
-     */
     public function update(Request $request, Supplier $supplier)
     {
-        $request->validate([
-            'company' => 'required|string',
+        $validated = $request->validate([
+            'company' => 'nullable|string',
             'last_name' => 'nullable|string',
             'first_name' => 'nullable|string',
             'email' => 'nullable|string',
@@ -83,23 +65,16 @@ class SupplierController extends Controller
             'ward' => 'nullable|string',
             'city' => 'nullable|string',
             'province' => 'nullable|string',
-            'payment_info' => 'required|in:active,inactive',
-            'store_id' => 'required|numeric',
+            'payment_info' => 'nullable|string',
         ]);
 
-        if (Store::where('id', $request['store_id'])->doesntExist()) {
-            return response()->json(['message' => 'store_id do not exist']);
-        }
+        $supplier->update($validated);
 
-        return $supplier->update($request->all());
+        return response()->json([
+            'data' => $supplier
+        ], 200);
     }
 
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param  \App\Models\Supplier  $supplier
-     * @return \Illuminate\Http\Response
-     */
     public function destroy(Supplier $supplier)
     {
         return Supplier::destroy($supplier->id);

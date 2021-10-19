@@ -11,61 +11,55 @@ use Illuminate\Http\Request;
 
 class OrderDetailController extends Controller
 {
-    public function index(Request $request)
+    public function index(Store $store, Branch $branch, Order $order)
     {
-        $store_id = $request->query('store_id');
-        $branch_id = $request->query('branch_id');
-        $order_id = $request->query('order_id');
-
-        if (Store::where('id', $store_id)->doesntExist()) {
-            return response()->json(['message' => 'store_id do not exist'], 404);
-        }
-
-        if (Branch::where('id', $branch_id)->doesntExist()) {
-            return response()->json(['message' => 'branch_id do not exist'], 404);
-        }
-
-        if (Order::where('id', $branch_id)->doesntExist()) {
-            return response()->json(['message' => 'order_id do not exist'], 404);
-        }
-
-        return OrderDetail::where('store_id', $store_id)
-                    ->where('branch_id', $branch_id)
-                    ->where('order_id', $order_id)->get();
+        return response()->json([
+            'data' => $order->orderDetails,
+        ], 200);
     }
 
-    /**
-     * Store a newly created resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\Response
-     */
-    public function store(Request $request)
+    public function store(Request $request, Store $store, Branch $branch, Order $order)
     {
-        return OrderDetail::create($request->all());
+        $validated = $request->validate([
+            'product_id' => 'required|numeric',
+            'quantity' => 'required|numeric',
+            'unit_price' => 'required|numeric',
+            'status' => 'required|string|in:allocated,invoiced,shipped,no-stock,on-order',
+            'discount' => 'nullable|numeric',
+        ]);
+
+
+        $orderDetail = OrderDetail::create(array_merge($validated, [
+            'store_id' => $store->id,
+            'branch_id' => $branch->id,
+            'order_id' => $order->id,
+        ]));
+
+        return response()->json([
+            'data' => $orderDetail,
+        ], 200);
     }
 
-    /**
-     * Display the specified resource.
-     *
-     * @param  \App\Models\OrderDetail  $orderDetail
-     * @return \Illuminate\Http\Response
-     */
     public function show(OrderDetail $orderDetail)
     {
+        
         return $orderDetail;
     }
 
-    /**
-     * Update the specified resource in storage.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\OrderDetail  $orderDetail
-     * @return \Illuminate\Http\Response
-     */
-    public function update(Request $request, OrderDetail $orderDetail)
+    public function update(Request $request, Order $order, OrderDetail $orderDetail)
     {
-        return $orderDetail->update($request->all());
+        $validated = $request->validate([
+            'quantity' => 'nullable|numeric',
+            'unit_price' => 'nullable|numeric',
+            'status' => 'nullable|string|in:allocated,invoiced,shipped,no-stock,on-order',
+            'discount' => 'nullable|numeric',
+        ]);
+
+        $orderDetail->update($validated);
+
+        return response()->json([
+            'data' => $orderDetail
+        ], 200);
     }
 
     /**
@@ -74,7 +68,7 @@ class OrderDetailController extends Controller
      * @param  \App\Models\OrderDetail  $orderDetail
      * @return \Illuminate\Http\Response
      */
-    public function destroy(OrderDetail $orderDetail)
+    public function destroy(Order $order,OrderDetail $orderDetail)
     {
         return OrderDetail::destroy($orderDetail->id);
     }

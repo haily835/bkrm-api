@@ -33,6 +33,7 @@ use Intervention\Image\Facades\Image;
 |
 */
 
+
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/ownerLogin', [AuthController::class, 'ownerLogin']);
 Route::post('/employeeLogin', [AuthController::class, 'employeeLogin']);
@@ -49,32 +50,84 @@ Route::post('/image-uploads', function(Request $request) {
     }
 });
 
-// Route::middleware()->get('/ownerLogout', );
-
 
 // Protected routes
-Route::group(['middleware' => ['auth:sanctum']], function () {
-    
-    Route::resource('stores', StoreController::class);
-    Route::resource('branches', BranchController::class);
-    Route::resource('products', ProductController::class);
-    Route::resource('product-prices', ProductPriceController::class);
-    Route::resource('employees', EmployeeController::class);
-    Route::resource('suppliers', SupplierController::class);
-    Route::resource('purchase-orders', PurchaseOrderController::class);
-    Route::resource('purchase-order-details', PurchaseOrderDetailController::class);
-    Route::resource('orders', OrderController::class);
-    Route::resource('invoices', InvoiceController::class);
-    Route::resource('order-details', OrderDetailController::class);
-    Route::resource('refunds', RefundController::class);
-    Route::resource('refund-details', RefundDetailController::class);
-    Route::resource('purchase-returns', PurchaseReturnController::class);
-    Route::resource('purchase-return-details', PurchaseReturnDetailController::class);
-    Route::resource('inventory-transactions', InventoryTransactionController::class);
-    Route::post('/logout', function (Request $request) {
-        $request->user()->tokens()->delete();
-        return [
-            'message' => 'user log out'
-        ];
-    });
+Route::group(['middleware' => ['auth:user']], function () {
+
+    Route::get('/stores', [StoreController::class, 'index']);
+    Route::post('/stores', [StoreController::class, 'store']);
+    Route::post('/stores/{store}', [StoreController::class, 'update']);
+    Route::delete('/stores/{store}', [StoreController::class, 'destroy']); 
+
+    Route::get('/stores/{store}/employees', [EmployeeController::class, 'index']);
+    Route::post('/stores/{store}/employees', [EmployeeController::class, 'store']);
+    Route::post('/employees/{employee}', [EmployeeController::class, 'update']);
+    Route::delete('/employees/{employee}', [EmployeeController::class, 'destroy']); 
+
+    Route::get('/stores/{store}/products', [ProductController::class, 'index']);
+    Route::post('/stores/{store}/products', [ProductController::class, 'store']);
+    Route::post('/products/{product}', [ProductController::class, 'update']);
+    Route::delete('/products/{product}', [ProductController::class, 'destroy']);
+
+    Route::get('/stores/{store}/products/{product}/product-prices', [ProductPriceController::class, 'index']);
+    Route::post('/stores/{store}/products/{product}/product-prices', [ProductPriceController::class, 'store']);
+    Route::post('/products/{product}/product-prices/{productPrice}', [ProductPriceController::class, 'update']);
+    Route::delete('/products/{product}/product-prices/{productPrice}', [ProductPriceController::class, 'destroy']);
+
+    Route::get('/stores/{store}/branches', [BranchController::class, 'index']);
+    Route::post('/stores/{store}/branches', [BranchController::class, 'store']);
+    Route::post('/branch/{branch}', [BranchController::class, 'update']);
+    Route::delete('/branch/{branch}', [BranchController::class, 'destroy']);
+
+    Route::get('/stores/{store}/branches/{branch}/orders', [OrderController::class, 'index']);
+    Route::post('/stores/{store}/branches/{branch}/orders', [OrderController::class, 'store']);
+    Route::post('/orders/{order}', [OrderController::class, 'update']);
+    Route::delete('/orders/{order}', [OrderController::class, 'destroy']);
+
+    Route::get('/stores/{store}/branches/{branch}/invoices', [InvoiceController::class, 'index']);
+    Route::post('/stores/{store}/branches/{branch}/invoices', [InvoiceController::class, 'store']);
+    Route::post('/invoices/{invoice}', [InvoiceController::class, 'update']);
+    Route::delete('/invoices/{invoice}', [InvoiceController::class, 'destroy']);
+
+    Route::get('/stores/{store}/branches/{branch}/orders/{order}/details', [OrderDetailController::class, 'index']);
+    Route::post('/stores/{store}/branches/{branch}/orders/{order}/details', [OrderDetailController::class, 'store']);
+    Route::post('/orders/{order}/details/{orderDetail}', [OrderDetailController::class, 'update']);
+    Route::delete('/orders/{order}/details/{orderDetail}', [OrderDetailController::class, 'destroy']);
+
+    Route::get('/stores/{store}/branches/{branch}/refunds', [RefundController::class, 'index']);
+    Route::post('/stores/{store}/branches/{branch}/refunds', [RefundController::class, 'store']);
+    Route::post('/refunds/{refund}', [RefundController::class, 'update']);
+    Route::delete('/refunds/{refund}', [RefundController::class, 'destroy']);
+
+    Route::get('/stores/{store}/branches/{branch}/refunds/{refund}/details', [RefundDetailController::class, 'index']);
+    Route::post('/stores/{store}/branches/{branch}/refunds/{refund}/details', [RefundDetailController::class, 'store']);
+    Route::post('/refunds/{refund}/details/{refundDetail}', [RefundDetailController::class, 'update']);
+    Route::delete('/refunds/{refund}/details/{refundDetail}', [RefundDetailController::class, 'destroy']);
+
+    Route::get('/stores/{store}/branches/{branch}/purchase-orders', [PurchaseOrderController::class, 'index']);
+    Route::post('/stores/{store}/branches/{branch}/purchase-orders', [PurchaseOrderController::class, 'store']);
+    Route::post('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update']);
+    Route::delete('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy']);
+
+    Route::get('/stores/{store}/branches/{branch}/purchase-orders/{purchaseOrder}/details', [PurchaseOrderDetailController::class, 'index']);
+    Route::post('/stores/{store}/branches/{branch}/purchase-orders/{purchaseOrder}/details', [PurchaseOrderDetailController::class, 'store']);
+    Route::post('/purchase-orders/{purchaseOrder}/details/{purchaseOrderDetail}', [PurchaseOrderDetailController::class, 'update']);
+    Route::delete('/purchase-orders/{purchaseOrder}/details/{purchaseOrderDetail}', [PurchaseOrderDetailController::class, 'destroy']);
+
+    Route::get('/stores/{store}/branches/{branch}/purchase-returns', [PurchaseReturnController::class, 'index']);
+    Route::post('/stores/{store}/branches/{branch}/purchase-returns', [PurchaseReturnController::class, 'store']);
+    Route::post('/branches/{branch}/purchase-returns/{purchaseReturn}', [PurchaseReturnController::class, 'update']);
+    Route::delete('/branches/{branch}/purchase-returns/{purchaseReturn}', [PurchaseReturnController::class, 'destroy']);
+
+    Route::get('/stores/{store}/branches/{branch}/purchase-returns/{purchaseReturn}/details', [PurchaseReturnnDetailController::class, 'index']);
+    Route::post('/stores/{store}/branches/{branch}/purchase-returns/{purchaseReturn}/details', [PurchaseReturnnDetailController::class, 'store']);
+    Route::post('/purchase-returns/{purchaseReturn}/details/{purchaseReturnDetail}', [PurchaseReturnnDetailController::class, 'update']);
+    Route::delete('/purchase-returns/{purchaseReturn}/details/{purchaseReturnDetail}', [PurchaseReturnnDetailController::class, 'destroy']);
+
+    Route::get('/stores/{store}/suppliers', [SupplierController::class, 'index']);
+    Route::post('/stores/{store}/suppliers', [SupplierController::class, 'store']);
+    Route::post('/suppliers/{supplier}', [SupplierController::class, 'update']);
+    Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy']);
+
+    Route::post('/logout', [AuthController::class, 'logout']);
 });

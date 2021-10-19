@@ -21,9 +21,8 @@ class CreatePurchaseReturnsTable extends Migration
             $table->foreignId('store_id');
             $table->dateTime('creation_date');
             $table->dateTime('approved_date')->nullable();
-            $table->dateTime('return_date')->nullable();
             $table->double('return_amount')->nullable();
-            $table->string('payment_method')->nullable();
+            $table->string('payment_type')->nullable();
             $table->longText('notes')->nullable();
             $table->foreignId('branch_id');
             $table->timestamps();
@@ -38,7 +37,7 @@ class CreatePurchaseReturnsTable extends Migration
             $table->foreignId('inventory_transaction_id')->nullable();
             $table->double('quantity');
             $table->foreignId('branch_id');
-            $table->double('unit_cost');
+            $table->double('unit_price');
             $table->boolean('removed_from_inventory');
             $table->timestamps();
         });

@@ -9,4 +9,9 @@ class PurchaseReturn extends Model
 {
     use HasFactory;
     protected $guarded = [];
+
+
+    function purchaseReturnDetails() {
+        return $this->hasMany(PurchaseReturnDetail::class);
+    }
 }
