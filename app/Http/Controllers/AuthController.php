@@ -73,7 +73,7 @@ class AuthController extends Controller
         return $this->createNewEmpToken($token);
     }
 
-    protected function createNewToken($token){
+    protected function createNewToken($token) {
         return response()->json([
             'access_token' => $token,
             'token_type' => 'bearer',

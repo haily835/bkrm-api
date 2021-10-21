@@ -12,13 +12,13 @@ class StoreController extends Controller
 {
     public function index(Request $request)
     {
-        $user_id = $request->query('user_id');
-
-        if (User::where('id', $user_id)->doesntExist()) {
-            return response()->json(['message' => 'user_id do not exist'], 404);
-        }
-
-        return Store::where('user_id', $user_id)->get();
+        $user = Auth::guard('user')->user();
+        $store = Store::where('user_id', $user->id)->get();
+        return response()->json([
+            'message' => '',
+            'data' => $store,
+            'user' => $user,
+        ], 200);
     }
 
     public function store(Request $request)

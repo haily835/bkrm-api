@@ -63,6 +63,7 @@ Route::group(['middleware' => ['auth:user']], function () {
     Route::post('/stores/{store}/employees', [EmployeeController::class, 'store']);
     Route::post('/employees/{employee}', [EmployeeController::class, 'update']);
     Route::delete('/employees/{employee}', [EmployeeController::class, 'destroy']); 
+    Route::post('/employees/{employee}/permissions', [EmployeeController::class, 'permissions']); 
 
     Route::get('/stores/{store}/products', [ProductController::class, 'index']);
     Route::post('/stores/{store}/products', [ProductController::class, 'store']);
@@ -129,5 +130,64 @@ Route::group(['middleware' => ['auth:user']], function () {
     Route::post('/suppliers/{supplier}', [SupplierController::class, 'update']);
     Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy']);
 
-    Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/ownerLogout', [AuthController::class, 'logout']);
+});
+
+
+
+// employee routes
+Route::post('/employee/logout', [AuthController::class, 'logout'])->middleware(['auth:employee']);
+
+Route::group(['middleware' => ['auth:employee', 'permission:manage-employees']], function () {
+    Route::get('/employee/stores/{store}/employees', [EmployeeController::class, 'index']);
+    Route::post('/employee/stores/{store}/employees', [EmployeeController::class, 'store']);
+    Route::post('/employee/employees/{employee}', [EmployeeController::class, 'update']);
+    Route::delete('/employee/employees/{employee}', [EmployeeController::class, 'destroy']); 
+});
+
+Route::group(['middleware' => ['auth:employee', 'permission:manage-orders']], function () {
+    Route::get('/employee/stores/{store}/branches/{branch}/orders', [OrderController::class, 'index']);
+    Route::post('/employee/stores/{store}/branches/{branch}/orders', [OrderController::class, 'store']);
+    Route::post('/employee/orders/{order}', [OrderController::class, 'update']);
+    Route::delete('/employee/orders/{order}', [OrderController::class, 'destroy']);
+
+    Route::get('/employee/stores/{store}/branches/{branch}/invoices', [InvoiceController::class, 'index']);
+    Route::post('/employee/stores/{store}/branches/{branch}/invoices', [InvoiceController::class, 'store']);
+    Route::post('/employee/invoices/{invoice}', [InvoiceController::class, 'update']);
+    Route::delete('/employee/invoices/{invoice}', [InvoiceController::class, 'destroy']);
+
+    Route::get('/employee/stores/{store}/branches/{branch}/orders/{order}/details', [OrderDetailController::class, 'index']);
+    Route::post('/employee/stores/{store}/branches/{branch}/orders/{order}/details', [OrderDetailController::class, 'store']);
+    Route::post('/employee/orders/{order}/details/{orderDetail}', [OrderDetailController::class, 'update']);
+    Route::delete('/employee/orders/{order}/details/{orderDetail}', [OrderDetailController::class, 'destroy']);
+
+    Route::get('/employee/stores/{store}/branches/{branch}/refunds', [RefundController::class, 'index']);
+    Route::post('/employee/stores/{store}/branches/{branch}/refunds', [RefundController::class, 'store']);
+    Route::post('/employee/refunds/{refund}', [RefundController::class, 'update']);
+    Route::delete('/employee/refunds/{refund}', [RefundController::class, 'destroy']);
+});
+
+Route::group(['middleware' => ['auth:employee', 'permission:manage-purchase-orders']], function () {
+    Route::get('/employee/stores/{store}/branches/{branch}/purchase-orders', [PurchaseOrderController::class, 'index']);
+    Route::post('/employee/stores/{store}/branches/{branch}/purchase-orders', [PurchaseOrderController::class, 'store']);
+    Route::post('/employee/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update']);
+    Route::delete('/employee/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy']);
+
+    Route::get('/employee/stores/{store}/branches/{branch}/purchase-orders/{purchaseOrder}/details', [PurchaseOrderDetailController::class, 'index']);
+    Route::post('/employee/stores/{store}/branches/{branch}/purchase-orders/{purchaseOrder}/details', [PurchaseOrderDetailController::class, 'store']);
+    Route::post('/employee/purchase-orders/{purchaseOrder}/details/{purchaseOrderDetail}', [PurchaseOrderDetailController::class, 'update']);
+    Route::delete('/employee/purchase-orders/{purchaseOrder}/details/{purchaseOrderDetail}', [PurchaseOrderDetailController::class, 'destroy']);
+
+});
+
+Route::group(['middleware' => ['auth:employee', 'permission:manage-purchase-returns']], function () {
+    Route::get('/employee/stores/{store}/branches/{branch}/purchase-returns', [PurchaseReturnController::class, 'index']);
+    Route::post('/employee/stores/{store}/branches/{branch}/purchase-returns', [PurchaseReturnController::class, 'store']);
+    Route::post('/employee/branches/{branch}/purchase-returns/{purchaseReturn}', [PurchaseReturnController::class, 'update']);
+    Route::delete('/employee/branches/{branch}/purchase-returns/{purchaseReturn}', [PurchaseReturnController::class, 'destroy']);
+
+    Route::get('/employee/stores/{store}/branches/{branch}/purchase-returns/{purchaseReturn}/details', [PurchaseReturnnDetailController::class, 'index']);
+    Route::post('/employee/stores/{store}/branches/{branch}/purchase-returns/{purchaseReturn}/details', [PurchaseReturnnDetailController::class, 'store']);
+    Route::post('/employee/purchase-returns/{purchaseReturn}/details/{purchaseReturnDetail}', [PurchaseReturnnDetailController::class, 'update']);
+    Route::delete('/employee/purchase-returns/{purchaseReturn}/details/{purchaseReturnDetail}', [PurchaseReturnnDetailController::class, 'destroy']);
 });

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Store;
 use App\Models\Employee;
+use Spatie\Permission\Models\Permission;
 
 class EmployeeController extends Controller
 {
@@ -44,7 +45,7 @@ class EmployeeController extends Controller
         ]);
     }
 
-    public function update(Employee $employee)
+    public function update(Request $request, Employee $employee)
     {
         $fields = $request->validate([
             'name' => 'nullable|string',
@@ -67,5 +68,27 @@ class EmployeeController extends Controller
     public function destroy(Employee $employee)
     {
         return Employee::destroy($employee->id);
+    }
+
+    public function permissions(Request $request, Employee $employee) {
+
+        $permissions = $request->validate([
+            'manage-employees' => 'nullable|boolean',
+            'manage-orders' => 'nullable|boolean',
+            'manage-purchase-orders' => 'nullable|boolean',
+            'manage-purchase-returns' => 'nullable|boolean',
+        ]);
+
+        foreach($permissions as $name => $value) {
+            if ($value) {
+                $employee->givePermissionTo($name);
+            } else {
+                $employee->revokePermissionTo($name);
+            }
+        }
+
+        return response()->json([
+            'message' => 'Update permissions successfully',
+        ],200);
     }
 }

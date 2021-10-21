@@ -73,4 +73,5 @@ class OrderController extends Controller
     {
         return Order::destroy($order->id);
     }
+
 }
