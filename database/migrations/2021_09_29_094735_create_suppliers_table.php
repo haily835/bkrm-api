@@ -15,6 +15,7 @@ class CreateSuppliersTable extends Migration
     {
         Schema::create('suppliers', function (Blueprint $table) {
             $table->id();
+            $table->string('uuid');
             $table->string('company');
             $table->string('name')->nullable();
             $table->string('email')->nullable();
@@ -30,7 +31,7 @@ class CreateSuppliersTable extends Migration
         });
 
 
-        Schema::create('product_supplier', function (Blueprint $table) {
+        Schema::create('product_suppliers', function (Blueprint $table) {
             $table->foreignId('product_id');
             $table->foreignId('supplier_id');
             $table->foreignId('store_id');
@@ -46,6 +47,6 @@ class CreateSuppliersTable extends Migration
     public function down()
     {
         Schema::dropIfExists('suppliers');
-        Schema::dropIfExists('product_supplier');
+        Schema::dropIfExists('product_suppliers');
     }
 }

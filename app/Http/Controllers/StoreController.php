@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Store;
 use App\Models\Employee;
 use App\Models\User;
+use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Intervention\Image\Facades\Image;
+use Illuminate\Support\Facades\Auth;
 
 class StoreController extends Controller
 {
@@ -24,8 +26,7 @@ class StoreController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'name' => 'required|unique:stores',
-            'user_id' => 'required|numeric',
+            'name' => 'required|string',
             'address' => 'required|string',
             'ward' => 'required|string',
             'city' => 'required|string',
@@ -46,7 +47,11 @@ class StoreController extends Controller
             $data['image'] = 'http://103.163.118.100/bkrm-api/storage/app/public/store-images/store-default.png';
         }
 
-        $store = Store::create($data);
+
+        $store = Store::create(array_merge($data, [
+            'user_id' => auth()->user()->id,
+            'uuid' => (string) Str::uuid()
+        ]));
 
         return response()->json([
             'message' => 'Store created successfully',
@@ -79,11 +84,20 @@ class StoreController extends Controller
         }
 
         $store->update($data);
-        return $store;
+        return response()->json([
+            'message' => 'Store updated successfully',
+            'store' => $store,
+        ], 200);
+
     }
 
     public function destroy(Store $store)
     {
-        return Store::destroy($store->id);
+        $isdeleted = Store::destroy($store->id);
+        return response()->json([
+            'message' => $isdeleted,
+            'data' => $store
+        ], 200);
+        
     }
 }

@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Branch;
 use App\Models\Store;
+use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class BranchController extends Controller
 {
@@ -29,7 +31,10 @@ class BranchController extends Controller
         ]);
 
         
-        $branch = $store->branches->create($data);
+        $branch = Branch::create(array_merge($data, [
+            'store_id' => $store->id,
+            'uuid' => (string) Str::uuid(),
+        ]));
 
         return response()->json([
             'message' => 'Branch created successfully',
@@ -37,12 +42,15 @@ class BranchController extends Controller
         ], 200);
     }
 
-    public function show(Branch $branch)
+    public function show(Store $store, Branch $branch)
     {
-        return $branch;
+        return response()->json([
+            'data' => $branch,
+        ], 200);
+        
     }
 
-    public function update(Request $request, Branch $branch)
+    public function update(Request $request, Store $store, Branch $branch)
     {
         $data = $request->validate([
             'name' => 'nullable|unique:stores',
@@ -62,8 +70,11 @@ class BranchController extends Controller
         ], 200);
     }
 
-    public function destroy(Branch $branch)
+    public function destroy(Store $store, Branch $branch)
     {
-        return Branch::destroy($branch->id);
+        return response()->json([
+            'message' => 'Branch deleted successfully',
+            'data' => $branch,
+        ], 200);
     }
 }

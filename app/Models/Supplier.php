@@ -9,4 +9,9 @@ class Supplier extends Model
 {
     use HasFactory;
     protected $guarded = [];
+   
+    protected $hidden = [
+        'id',
+        'store_id'
+    ];
 }

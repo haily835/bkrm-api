@@ -24,7 +24,7 @@ class PurchaseReturnController extends Controller
             'created_by' => 'required|numeric',
             'creation_date' => 'required|date_format:Y-m-d',
             'approved_by' => 'nullable|numeric',
-            'approved_date' => 'required|date_format:Y-m-d',
+            'approved_date' => 'nullable|date_format:Y-m-d',
             'payment_type' => 'nullable|string',
             'return_amount' => 'nullable|numeric',
             'notes' => 'nullable|text',
@@ -44,8 +44,14 @@ class PurchaseReturnController extends Controller
             'data' => $purchaseReturn,
         ], 200);
     }
+
+    public function show(Store $store, Branch $branch, PurchaseReturn $purchaseReturn) {
+        return response()->json([
+            'data' => $purchaseReturn,
+        ], 200);
+    }
     
-    public function update(Request $request, PurchaseReturn $purchaseReturn)
+    public function update(Request $request, Store $store, Branch $branch, PurchaseReturn $purchaseReturn)
     {
         $validated = $request->validate([
             'supplier_id' => 'nullable|numeric',
@@ -64,8 +70,12 @@ class PurchaseReturnController extends Controller
         ], 200);
     }
 
-    public function destroy(PurchaseReturn $purchaseReturn)
+    public function destroy(Store $store, Branch $branch, PurchaseReturn $purchaseReturn)
     {
-        return PurchaseReturn::destroy($purchaseReturn);
+        $isdeleted = PurchaseReturn::destroy($purchaseReturn);
+        return response()->json([
+            'message' => $isdeleted,
+            'data' => $purchaseReturn
+        ], 200);
     }
 }

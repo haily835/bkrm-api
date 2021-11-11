@@ -30,7 +30,7 @@ class RefundController extends Controller
             'user_id' => 'required|numeric',
             'invoice_id' => 'required|numeric',
             'payment_type' => 'required|string',
-            'notes' => 'required|string',
+            'notes' => 'nullable|string',
         ]);
 
         $invoice = Invoice::find($validated['invoice_id'])->first();
@@ -55,12 +55,14 @@ class RefundController extends Controller
         ], 200);
     }
 
-    public function show(Refund $refund)
+    public function show(Store $store, Branch $branch, Refund $refund)
     {
-        return $refund;
+        return response()->json([
+            'data' => $refund,
+        ], 200);
     }
 
-    public function update(Request $request, Refund $refund)
+    public function update(Request $request, Store $store, Branch $branch, Refund $refund)
     {
         $validated = $request->validate([
             'payment_type' => 'nullable|string',
@@ -75,10 +77,12 @@ class RefundController extends Controller
         ], 200);
     }
     
-    public function destroy(Refund $refund)
+    public function destroy(Store $store, Branch $branch, Refund $refund)
     {
-        return Refund::destroy($refund->id);
+        $isdeleted = Refund::destroy($refund->id);
+        return response()->json([
+            'message' => $isdeleted,
+            'data' => $refund
+        ], 200);
     }
-
-    
 }

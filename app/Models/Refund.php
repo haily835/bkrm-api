@@ -9,6 +9,10 @@ class Refund extends Model
 {
     use HasFactory;
     protected $guarded = [];
+    
+    protected $hidden = [
+        'id',
+    ];
 
     function refundDetails() {
         return $this->hasMany(RefundDetail::class);

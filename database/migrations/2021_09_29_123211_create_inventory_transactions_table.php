@@ -15,6 +15,7 @@ class CreateInventoryTransactionsTable extends Migration
     {
         Schema::create('inventory_transactions', function (Blueprint $table) {
             $table->id();
+            $table->string('uuid');
             $table->foreignId('store_id');
             $table->foreignId('product_id');
             $table->foreignId('purchase_order_id')->nullable();

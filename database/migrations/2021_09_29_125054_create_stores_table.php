@@ -15,6 +15,7 @@ class CreateStoresTable extends Migration
     {
         Schema::create('stores', function (Blueprint $table) {
             $table->id();
+            $table->string('uuid');
             $table->string('name')->unique();
             $table->unsignedBigInteger('user_id')->unique();
 

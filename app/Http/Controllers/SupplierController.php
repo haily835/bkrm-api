@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Supplier;
 use App\Models\Store;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 class SupplierController extends Controller
 {
@@ -37,8 +38,10 @@ class SupplierController extends Controller
             'payment_info' => 'nullable|string',
         ]);
 
-        $supplier = Supplier::create(array_merge(
-            ['store_id' => $store->id],
+        $supplier = Supplier::create(array_merge([
+            'store_id' => $store->id,
+            'uuid' => (string) Str::uuid()
+        ],
             $validated
         ));
 
@@ -47,17 +50,18 @@ class SupplierController extends Controller
         ], 200);
     }
 
-    public function show(Supplier $supplier)
+    public function show(Store $store, Supplier $supplier)
     {
-        return $supplier;
+        return response()->json([
+            'data' => $supplier
+        ], 200);
     }
 
-    public function update(Request $request, Supplier $supplier)
+    public function update(Request $request, Store $store, Supplier $supplier)
     {
         $validated = $request->validate([
             'company' => 'nullable|string',
-            'last_name' => 'nullable|string',
-            'first_name' => 'nullable|string',
+            'name' => 'nullable|string',
             'email' => 'nullable|string',
             'job_title' => 'nullable|string',
             'phone' => 'nullable|string',
@@ -75,9 +79,12 @@ class SupplierController extends Controller
         ], 200);
     }
 
-    public function destroy(Supplier $supplier)
+    public function destroy(Store $store, Supplier $supplier)
     {
-        return Supplier::destroy($supplier->id);
+        $isdeleted = Supplier::destroy($supplier->id);
+        return response()->json([
+            'message' => $isdeleted,
+            'data' => $supplier
+        ], 200);
     }
-
 }

@@ -5,10 +5,17 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+
 class Branch extends Model
 {
     use HasFactory;
     protected $guarded = [];
+
+    protected $hidden = [
+        'id',
+        'store_id'
+    ];
+
 
     public function orders()
     {
@@ -28,5 +35,10 @@ class Branch extends Model
     public function purchaseReturns()
     {
         return $this->hasMany(PurchaseReturn::class);
+    }
+
+    public function invoices()
+    {
+        return $this->hasMany(Invoice::class);
     }
 }

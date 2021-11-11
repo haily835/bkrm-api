@@ -20,6 +20,9 @@ use App\Http\Controllers\PurchaseReturnController;
 use App\Http\Controllers\PurchaseReturnDetailController;
 use App\Http\Controllers\InventoryTransactionController;
 use App\Http\Controllers\BarcodeController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\AddressController;
 use Intervention\Image\Facades\Image;
 
 /*
@@ -34,8 +37,9 @@ use Intervention\Image\Facades\Image;
 */
 
 
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/ownerLogin', [AuthController::class, 'ownerLogin']);
+Route::post('/register', [AuthController::class, 'ownerRegister']);
+Route::post('/login', [AuthController::class, 'login']);
+Route::get('/verify-token', [AuthController::class, 'verifyOwnerToken']);
 Route::post('/employeeLogin', [AuthController::class, 'employeeLogin']);
 Route::resource('/barcodes', BarcodeController::class);
 Route::post('/image-uploads', function(Request $request) {
@@ -50,86 +54,119 @@ Route::post('/image-uploads', function(Request $request) {
     }
 });
 
+Route::get('/address/provinces/', [AddressController::class, 'getProvinces']);
+Route::get('/address/provinces/{province}/districts', [AddressController::class, 'getDistricts']);
+Route::get('/address/provinces/{province}/districts/{district}/wards', [AddressController::class, 'getWards']);
+
 
 // Protected routes
 Route::group(['middleware' => ['auth:user']], function () {
 
     Route::get('/stores', [StoreController::class, 'index']);
     Route::post('/stores', [StoreController::class, 'store']);
-    Route::post('/stores/{store}', [StoreController::class, 'update']);
-    Route::delete('/stores/{store}', [StoreController::class, 'destroy']); 
+    Route::put('/stores/{store:uuid}', [StoreController::class, 'update']);
+    Route::delete('/stores/{store:uuid}', [StoreController::class, 'destroy']); 
 
-    Route::get('/stores/{store}/employees', [EmployeeController::class, 'index']);
-    Route::post('/stores/{store}/employees', [EmployeeController::class, 'store']);
-    Route::post('/employees/{employee}', [EmployeeController::class, 'update']);
-    Route::delete('/employees/{employee}', [EmployeeController::class, 'destroy']); 
-    Route::post('/employees/{employee}/permissions', [EmployeeController::class, 'permissions']); 
+    Route::get('/stores/{store:uuid}/employees', [EmployeeController::class, 'index']);
+    Route::post('/stores/{store:uuid}/employees', [EmployeeController::class, 'store']);
+    Route::get('/stores/{store:uuid}/employees/{employee:uuid}', [EmployeeController::class, 'show']);
+    Route::put('/stores/{store:uuid}/employees/{employee:uuid}', [EmployeeController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/employees/{employee:uuid}', [EmployeeController::class, 'destroy']); 
+    Route::post('/stores/{store:uuid}/employees/{employee:uuid}/permissions', [EmployeeController::class, 'permissions']);
+    Route::get('/stores/{store:uuid}/employees/{employee:uuid}/permissions', [EmployeeController::class, 'getEmpPermissions']);
 
-    Route::get('/stores/{store}/products', [ProductController::class, 'index']);
-    Route::post('/stores/{store}/products', [ProductController::class, 'store']);
-    Route::post('/products/{product}', [ProductController::class, 'update']);
-    Route::delete('/products/{product}', [ProductController::class, 'destroy']);
+    Route::get('/stores/{store:uuid}/products/{product:uuid}/product-prices', [ProductPriceController::class, 'index']);
+    Route::post('/stores/{store:uuid}/products/{product:uuid}/product-prices', [ProductPriceController::class, 'store']);
+    Route::put('/stores/{store:uuid}/products/{product:uuid}/product-prices/{productPrice}', [ProductPriceController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/products/{product:uuid}/product-prices/{productPrice}', [ProductPriceController::class, 'destroy']);
 
-    Route::get('/stores/{store}/products/{product}/product-prices', [ProductPriceController::class, 'index']);
-    Route::post('/stores/{store}/products/{product}/product-prices', [ProductPriceController::class, 'store']);
-    Route::post('/products/{product}/product-prices/{productPrice}', [ProductPriceController::class, 'update']);
-    Route::delete('/products/{product}/product-prices/{productPrice}', [ProductPriceController::class, 'destroy']);
+    Route::get('/stores/{store:uuid}/products/{product:uuid}/suppliers', [ProductController::class, 'suppliers']);
+    Route::post('/stores/{store:uuid}/products/{product:uuid}/suppliers', [ProductController::class, 'addSupplier']);
+    Route::delete('/stores/{store:uuid}/products/{product:uuid}/suppliers/{supplier}', [ProductController::class, 'deleteSupplier']);
 
-    Route::get('/stores/{store}/branches', [BranchController::class, 'index']);
-    Route::post('/stores/{store}/branches', [BranchController::class, 'store']);
-    Route::post('/branch/{branch}', [BranchController::class, 'update']);
-    Route::delete('/branch/{branch}', [BranchController::class, 'destroy']);
+    Route::get('/stores/{store:uuid}/products', [ProductController::class, 'index']);
+    Route::post('/stores/{store:uuid}/products', [ProductController::class, 'store']);
+    Route::put('/stores/{store:uuid}/products/{product:uuid}', [ProductController::class, 'update']);
+    Route::get('/stores/{store:uuid}/products/{product:uuid}', [ProductController::class, 'show']);
+    Route::delete('/stores/{store:uuid}/products/{product:uuid}', [ProductController::class, 'destroy']);
 
-    Route::get('/stores/{store}/branches/{branch}/orders', [OrderController::class, 'index']);
-    Route::post('/stores/{store}/branches/{branch}/orders', [OrderController::class, 'store']);
-    Route::post('/orders/{order}', [OrderController::class, 'update']);
-    Route::delete('/orders/{order}', [OrderController::class, 'destroy']);
 
-    Route::get('/stores/{store}/branches/{branch}/invoices', [InvoiceController::class, 'index']);
-    Route::post('/stores/{store}/branches/{branch}/invoices', [InvoiceController::class, 'store']);
-    Route::post('/invoices/{invoice}', [InvoiceController::class, 'update']);
-    Route::delete('/invoices/{invoice}', [InvoiceController::class, 'destroy']);
+    Route::get('/stores/{store:uuid}/branches', [BranchController::class, 'index']);
+    Route::post('/stores/{store:uuid}/branches', [BranchController::class, 'store']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}', [BranchController::class, 'show']);
+    Route::put('/stores/{store:uuid}/branches/{branch:uuid}', [BranchController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/branches/{branch:uuid}', [BranchController::class, 'destroy']);
 
-    Route::get('/stores/{store}/branches/{branch}/orders/{order}/details', [OrderDetailController::class, 'index']);
-    Route::post('/stores/{store}/branches/{branch}/orders/{order}/details', [OrderDetailController::class, 'store']);
-    Route::post('/orders/{order}/details/{orderDetail}', [OrderDetailController::class, 'update']);
-    Route::delete('/orders/{order}/details/{orderDetail}', [OrderDetailController::class, 'destroy']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/orders', [OrderController::class, 'index']);
+    Route::post('/stores/{store:uuid}/branches/{branch:uuid}/orders', [OrderController::class, 'store']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/orders/{order:uuid}', [OrderController::class, 'show']);
+    Route::put('/stores/{store:uuid}/branches/{branch:uuid}/orders/{order:uuid}', [OrderController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/branches/{branch:uuid}/orders/{order:uuid}', [OrderController::class, 'destroy']);
 
-    Route::get('/stores/{store}/branches/{branch}/refunds', [RefundController::class, 'index']);
-    Route::post('/stores/{store}/branches/{branch}/refunds', [RefundController::class, 'store']);
-    Route::post('/refunds/{refund}', [RefundController::class, 'update']);
-    Route::delete('/refunds/{refund}', [RefundController::class, 'destroy']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/invoices', [InvoiceController::class, 'index']);
+    Route::post('/stores/{store:uuid}/branches/{branch:uuid}/invoices', [InvoiceController::class, 'store']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/invoices/{invoice:uuid}', [InvoiceController::class, 'show']);
+    Route::put('/stores/{store:uuid}/branches/{branch:uuid}/invoices/{invoice:uuid}', [InvoiceController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/branches/{branch:uuid}/invoices/{invoice:uuid}', [InvoiceController::class, 'destroy']);
 
-    Route::get('/stores/{store}/branches/{branch}/refunds/{refund}/details', [RefundDetailController::class, 'index']);
-    Route::post('/stores/{store}/branches/{branch}/refunds/{refund}/details', [RefundDetailController::class, 'store']);
-    Route::post('/refunds/{refund}/details/{refundDetail}', [RefundDetailController::class, 'update']);
-    Route::delete('/refunds/{refund}/details/{refundDetail}', [RefundDetailController::class, 'destroy']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/orders/{order:uuid}/details', [OrderDetailController::class, 'index']);
+    Route::post('/stores/{store:uuid}/branches/{branch:uuid}/orders/{order:uuid}/details', [OrderDetailController::class, 'store']);
+    Route::put('/stores/{store:uuid}/branches/{branch:uuid}/orders/{order:uuid}/details/{orderDetail}', [OrderDetailController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/branches/{branch:uuid}/orders/{order:uuid}/details/{orderDetail}', [OrderDetailController::class, 'destroy']);
 
-    Route::get('/stores/{store}/branches/{branch}/purchase-orders', [PurchaseOrderController::class, 'index']);
-    Route::post('/stores/{store}/branches/{branch}/purchase-orders', [PurchaseOrderController::class, 'store']);
-    Route::post('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update']);
-    Route::delete('/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/refunds', [RefundController::class, 'index']);
+    Route::post('/stores/{store:uuid}/branches/{branch:uuid}/refunds', [RefundController::class, 'store']);
+    Route::put('/stores/{store:uuid}/branches/{branch:uuid}/refunds/{refund:uuid}', [RefundController::class, 'update']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/refunds/{refund:uuid}', [RefundController::class, 'show']);
+    Route::delete('/stores/{store:uuid}/branches/{branch:uuid}/refunds/{refund:uuid}', [RefundController::class, 'destroy']);
 
-    Route::get('/stores/{store}/branches/{branch}/purchase-orders/{purchaseOrder}/details', [PurchaseOrderDetailController::class, 'index']);
-    Route::post('/stores/{store}/branches/{branch}/purchase-orders/{purchaseOrder}/details', [PurchaseOrderDetailController::class, 'store']);
-    Route::post('/purchase-orders/{purchaseOrder}/details/{purchaseOrderDetail}', [PurchaseOrderDetailController::class, 'update']);
-    Route::delete('/purchase-orders/{purchaseOrder}/details/{purchaseOrderDetail}', [PurchaseOrderDetailController::class, 'destroy']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/refunds/{refund:uuid}/details', [RefundDetailController::class, 'index']);
+    Route::post('/stores/{store:uuid}/branches/{branch:uuid}/refunds/{refund:uuid}/details', [RefundDetailController::class, 'store']);
+    Route::put('/stores/{store:uuid}/branches/{branch:uuid}/refunds/{refund:uuid}/details/{refundDetail}', [RefundDetailController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/branches/{branch:uuid}/refunds/{refund:uuid}/details/{refundDetail}', [RefundDetailController::class, 'destroy']);
 
-    Route::get('/stores/{store}/branches/{branch}/purchase-returns', [PurchaseReturnController::class, 'index']);
-    Route::post('/stores/{store}/branches/{branch}/purchase-returns', [PurchaseReturnController::class, 'store']);
-    Route::post('/branches/{branch}/purchase-returns/{purchaseReturn}', [PurchaseReturnController::class, 'update']);
-    Route::delete('/branches/{branch}/purchase-returns/{purchaseReturn}', [PurchaseReturnController::class, 'destroy']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/purchase-orders', [PurchaseOrderController::class, 'index']);
+    Route::post('/stores/{store:uuid}/branches/{branch:uuid}/purchase-orders', [PurchaseOrderController::class, 'store']);
+    Route::post('/stores/{store:uuid}/branches/{branch:uuid}/purchase-orders/addInventory', [PurchaseOrderController::class, 'addInventory']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/purchase-orders/{purchaseOrder:uuid}', [PurchaseOrderController::class, 'show']);
+    Route::put('/stores/{store:uuid}/branches/{branch:uuid}/purchase-orders/{purchaseOrder:uuid}', [PurchaseOrderController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/branches/{branch:uuid}/purchase-orders/{purchaseOrder:uuid}', [PurchaseOrderController::class, 'destroy']);
 
-    Route::get('/stores/{store}/branches/{branch}/purchase-returns/{purchaseReturn}/details', [PurchaseReturnnDetailController::class, 'index']);
-    Route::post('/stores/{store}/branches/{branch}/purchase-returns/{purchaseReturn}/details', [PurchaseReturnnDetailController::class, 'store']);
-    Route::post('/purchase-returns/{purchaseReturn}/details/{purchaseReturnDetail}', [PurchaseReturnnDetailController::class, 'update']);
-    Route::delete('/purchase-returns/{purchaseReturn}/details/{purchaseReturnDetail}', [PurchaseReturnnDetailController::class, 'destroy']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/purchase-orders/{purchaseOrder:uuid}/details', [PurchaseOrderDetailController::class, 'index']);
+    Route::post('/stores/{store:uuid}/branches/{branch:uuid}/purchase-orders/{purchaseOrder:uuid}/details', [PurchaseOrderDetailController::class, 'store']);
+    Route::put('/stores/{store:uuid}/branches/{branch:uuid}/purchase-orders/{purchaseOrder:uuid}/details/{purchaseOrderDetail}', [PurchaseOrderDetailController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/branches/{branch:uuid}/purchase-orders/{purchaseOrder:uuid}/details/{purchaseOrderDetail}', [PurchaseOrderDetailController::class, 'destroy']);
 
-    Route::get('/stores/{store}/suppliers', [SupplierController::class, 'index']);
-    Route::post('/stores/{store}/suppliers', [SupplierController::class, 'store']);
-    Route::post('/suppliers/{supplier}', [SupplierController::class, 'update']);
-    Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns', [PurchaseReturnController::class, 'index']);
+    Route::post('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns', [PurchaseReturnController::class, 'store']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns/{purchaseReturn:uuid}', [PurchaseReturnController::class, 'show']);
+    Route::put('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns/{purchaseReturn:uuid}', [PurchaseReturnController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns/{purchaseReturn:uuid}', [PurchaseReturnController::class, 'destroy']);
 
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns/{purchaseReturn:uuid}/details', [PurchaseReturnDetailController::class, 'index']);
+    Route::post('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns/{purchaseReturn:uuid}/details', [PurchaseReturnDetailController::class, 'store']);
+    Route::put('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns/{purchaseReturn:uuid}/details/{purchaseReturnDetail}', [PurchaseReturnDetailController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns/{purchaseReturn:uuid}/details/{purchaseReturnDetail}', [PurchaseReturnDetailController::class, 'destroy']);
+
+    Route::get('/stores/{store:uuid}/suppliers', [SupplierController::class, 'index']);
+    Route::post('/stores/{store:uuid}/suppliers', [SupplierController::class, 'store']);
+    Route::get('/stores/{store:uuid}/suppliers/{supplier:uuid}', [SupplierController::class, 'show']);
+    Route::put('/stores/{store:uuid}/suppliers/{supplier:uuid}', [SupplierController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/suppliers/{supplier:uuid}', [SupplierController::class, 'destroy']);
+
+    Route::get('/stores/{store:uuid}/customers', [CustomerController::class, 'index']);
+    Route::post('/stores/{store:uuid}/customers', [CustomerController::class, 'store']);
+    Route::get('/stores/{store:uuid}/customers/{customer:uuid}', [CustomerController::class, 'show']);
+    Route::put('/stores/{store:uuid}/customers/{customer:uuid}', [CustomerController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/customers/{customer:uuid}', [CustomerController::class, 'destroy']);
+
+    Route::get('/stores/{store:uuid}/categories', [CategoryController::class, 'index']);
+    Route::post('/stores/{store:uuid}/categories', [CategoryController::class, 'store']);
+    Route::get('/stores/{store:uuid}/categories/{category:uuid}', [CategoryController::class, 'show']);
+    Route::put('/stores/{store:uuid}/categories/{category:uuid}', [CategoryController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/categories/{category:uuid}', [CategoryController::class, 'destroy']);
+
+    Route::get('stores/{store:uuid}/branches/{branch:uuid}/inventory', [InventoryTransactionController::class, 'index']);
     Route::post('/ownerLogout', [AuthController::class, 'logout']);
 });
 
@@ -139,43 +176,43 @@ Route::group(['middleware' => ['auth:user']], function () {
 Route::post('/employee/logout', [AuthController::class, 'logout'])->middleware(['auth:employee']);
 
 Route::group(['middleware' => ['auth:employee', 'permission:manage-employees']], function () {
-    Route::get('/employee/stores/{store}/employees', [EmployeeController::class, 'index']);
-    Route::post('/employee/stores/{store}/employees', [EmployeeController::class, 'store']);
-    Route::post('/employee/employees/{employee}', [EmployeeController::class, 'update']);
-    Route::delete('/employee/employees/{employee}', [EmployeeController::class, 'destroy']); 
+    Route::get('/employee/stores/{store:uuid}/employees', [EmployeeController::class, 'index']);
+    Route::post('/employee/stores/{store:uuid}/employees', [EmployeeController::class, 'store']);
+    Route::put('/employee/employees/{employee:uuid}', [EmployeeController::class, 'update']);
+    Route::delete('/employee/employees/{employee:uuid}', [EmployeeController::class, 'destroy']); 
 });
 
 Route::group(['middleware' => ['auth:employee', 'permission:manage-orders']], function () {
-    Route::get('/employee/stores/{store}/branches/{branch}/orders', [OrderController::class, 'index']);
-    Route::post('/employee/stores/{store}/branches/{branch}/orders', [OrderController::class, 'store']);
-    Route::post('/employee/orders/{order}', [OrderController::class, 'update']);
-    Route::delete('/employee/orders/{order}', [OrderController::class, 'destroy']);
+    Route::get('/employee/stores/{store:uuid}/branches/{branch:uuid}/orders', [OrderController::class, 'index']);
+    Route::post('/employee/stores/{store:uuid}/branches/{branch:uuid}/orders', [OrderController::class, 'store']);
+    Route::put('/employee/orders/{order:uuid}', [OrderController::class, 'update']);
+    Route::delete('/employee/orders/{order:uuid}', [OrderController::class, 'destroy']);
 
     Route::get('/employee/stores/{store}/branches/{branch}/invoices', [InvoiceController::class, 'index']);
     Route::post('/employee/stores/{store}/branches/{branch}/invoices', [InvoiceController::class, 'store']);
-    Route::post('/employee/invoices/{invoice}', [InvoiceController::class, 'update']);
+    Route::put('/employee/invoices/{invoice}', [InvoiceController::class, 'update']);
     Route::delete('/employee/invoices/{invoice}', [InvoiceController::class, 'destroy']);
 
     Route::get('/employee/stores/{store}/branches/{branch}/orders/{order}/details', [OrderDetailController::class, 'index']);
     Route::post('/employee/stores/{store}/branches/{branch}/orders/{order}/details', [OrderDetailController::class, 'store']);
-    Route::post('/employee/orders/{order}/details/{orderDetail}', [OrderDetailController::class, 'update']);
+    Route::put('/employee/orders/{order}/details/{orderDetail}', [OrderDetailController::class, 'update']);
     Route::delete('/employee/orders/{order}/details/{orderDetail}', [OrderDetailController::class, 'destroy']);
 
     Route::get('/employee/stores/{store}/branches/{branch}/refunds', [RefundController::class, 'index']);
     Route::post('/employee/stores/{store}/branches/{branch}/refunds', [RefundController::class, 'store']);
-    Route::post('/employee/refunds/{refund}', [RefundController::class, 'update']);
+    Route::put('/employee/refunds/{refund}', [RefundController::class, 'update']);
     Route::delete('/employee/refunds/{refund}', [RefundController::class, 'destroy']);
 });
 
 Route::group(['middleware' => ['auth:employee', 'permission:manage-purchase-orders']], function () {
     Route::get('/employee/stores/{store}/branches/{branch}/purchase-orders', [PurchaseOrderController::class, 'index']);
     Route::post('/employee/stores/{store}/branches/{branch}/purchase-orders', [PurchaseOrderController::class, 'store']);
-    Route::post('/employee/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update']);
+    Route::put('/employee/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'update']);
     Route::delete('/employee/purchase-orders/{purchaseOrder}', [PurchaseOrderController::class, 'destroy']);
 
     Route::get('/employee/stores/{store}/branches/{branch}/purchase-orders/{purchaseOrder}/details', [PurchaseOrderDetailController::class, 'index']);
     Route::post('/employee/stores/{store}/branches/{branch}/purchase-orders/{purchaseOrder}/details', [PurchaseOrderDetailController::class, 'store']);
-    Route::post('/employee/purchase-orders/{purchaseOrder}/details/{purchaseOrderDetail}', [PurchaseOrderDetailController::class, 'update']);
+    Route::put('/employee/purchase-orders/{purchaseOrder}/details/{purchaseOrderDetail}', [PurchaseOrderDetailController::class, 'update']);
     Route::delete('/employee/purchase-orders/{purchaseOrder}/details/{purchaseOrderDetail}', [PurchaseOrderDetailController::class, 'destroy']);
 
 });
@@ -183,11 +220,11 @@ Route::group(['middleware' => ['auth:employee', 'permission:manage-purchase-orde
 Route::group(['middleware' => ['auth:employee', 'permission:manage-purchase-returns']], function () {
     Route::get('/employee/stores/{store}/branches/{branch}/purchase-returns', [PurchaseReturnController::class, 'index']);
     Route::post('/employee/stores/{store}/branches/{branch}/purchase-returns', [PurchaseReturnController::class, 'store']);
-    Route::post('/employee/branches/{branch}/purchase-returns/{purchaseReturn}', [PurchaseReturnController::class, 'update']);
+    Route::put('/employee/branches/{branch}/purchase-returns/{purchaseReturn}', [PurchaseReturnController::class, 'update']);
     Route::delete('/employee/branches/{branch}/purchase-returns/{purchaseReturn}', [PurchaseReturnController::class, 'destroy']);
 
     Route::get('/employee/stores/{store}/branches/{branch}/purchase-returns/{purchaseReturn}/details', [PurchaseReturnnDetailController::class, 'index']);
     Route::post('/employee/stores/{store}/branches/{branch}/purchase-returns/{purchaseReturn}/details', [PurchaseReturnnDetailController::class, 'store']);
-    Route::post('/employee/purchase-returns/{purchaseReturn}/details/{purchaseReturnDetail}', [PurchaseReturnnDetailController::class, 'update']);
+    Route::put('/employee/purchase-returns/{purchaseReturn}/details/{purchaseReturnDetail}', [PurchaseReturnnDetailController::class, 'update']);
     Route::delete('/employee/purchase-returns/{purchaseReturn}/details/{purchaseReturnDetail}', [PurchaseReturnnDetailController::class, 'destroy']);
 });

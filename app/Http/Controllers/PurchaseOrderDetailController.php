@@ -25,8 +25,9 @@ class PurchaseOrderDetailController extends Controller
             'product_id' => 'required|numeric',
             'quantity' => 'required|numeric',
             'unit_cost' => 'required|numeric',
-            'date_received' => 'required|date_format:Y-m-d',
+            'date_received' => 'nullable|date_format:Y-m-d',
             'posted_to_inventory' => 'required|boolean',
+            'status' => 'required|string'
         ]);
         
         $purchaseOrderDetail = PurchaseOrderDetail::create(array_merge(
@@ -44,7 +45,9 @@ class PurchaseOrderDetailController extends Controller
         ], 200);
     }
 
-    public function update(Request $request, PurchaseOrder $purchaseOrder, PurchaseOrderDetail $purchaseOrderDetail)
+    public function update(Request $request, Store $store, Branch $branch, 
+                            PurchaseOrder $purchaseOrder, 
+                            PurchaseOrderDetail $purchaseOrderDetail)
     {
         $validated = $request->validate([
             'quantity' => 'nullable|numeric',
@@ -73,15 +76,23 @@ class PurchaseOrderDetailController extends Controller
                 
                 $data['inventory_transaction_id'] =  null;
             }
+            $purchaseOrderDetail->update($data);
         }
 
+
         return response()->json([
-            'data' => $purchaseOrderDetail->update($data),
+            'data' => $purchaseOrderDetail
         ], 200);
     }
 
-    public function destroy( PurchaseOrder $purchaseOrder, PurchaseOrderDetail $purchaseOrderDetail)
+    public function destroy( Store $store, Branch $branch, 
+                            PurchaseOrder $purchaseOrder, 
+                            PurchaseOrderDetail $purchaseOrderDetail)
     { 
-        return PurchaseOrderDetail::destroy($purchaseOrderDetail->id);
+        $isdeleted = PurchaseOrderDetail::destroy($purchaseOrderDetail->id);
+        return response()->json([
+            'message' => $isdeleted,
+            'data' => $purchaseOrderDetail
+        ], 200);
     }
 }

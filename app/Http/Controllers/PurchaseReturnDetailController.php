@@ -37,7 +37,9 @@ class PurchaseReturnDetailController extends Controller
         ], 200);
     }
 
-    public function update(Request $request, PurchaseReturn $purchaseReturn, PurchaseReturnDetail $purchaseReturnDetail)
+    public function update(Request $request, Store $store, Branch $branch,
+                             PurchaseReturn $purchaseReturn, 
+                             PurchaseReturnDetail $purchaseReturnDetail)
     {
         $validated = $request->validate([
             'quantity' => 'nullable|numeric',
@@ -53,8 +55,15 @@ class PurchaseReturnDetailController extends Controller
         ], 200);
     }
 
-    public function destroy(PurchaseReturn $purchaseReturn, PurchaseReturnDetail $purchaseReturnDetail)
+    public function destroy(Store $store, Branch $branch, 
+                            PurchaseReturn $purchaseReturn, 
+                            PurchaseReturnDetail $purchaseReturnDetail)
     {
-        return PurchaseReturnDetail::destroy($purchaseReturnDetail->id);
+        $isdeleted = PurchaseReturnDetail::destroy($purchaseReturnDetail->id);
+        return response()->json([
+            'message' => $isdeleted,
+            'data' => $purchaseReturnDetail
+        ], 200);
+        
     }
 }

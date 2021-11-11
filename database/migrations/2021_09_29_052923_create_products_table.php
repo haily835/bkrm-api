@@ -15,6 +15,7 @@ class CreateProductsTable extends Migration
     {
         Schema::create('products', function (Blueprint $table) {
             $table->id();
+            $table->string('uuid');
             $table->string('name');
             $table->double('list_price');
             $table->double('standard_price');
@@ -24,6 +25,7 @@ class CreateProductsTable extends Migration
             $table->string('image');
             $table->foreignId('category_id');
             $table->bigInteger('min_reorder_quantity');
+        
             $table->timestamps();
         });
 

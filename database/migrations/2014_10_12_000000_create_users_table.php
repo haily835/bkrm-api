@@ -23,7 +23,8 @@ class CreateUsersTable extends Migration
             $table->dateTime('date_of_birth')->nullable();
             $table->string('status')->nullable();
             $table->string('gender')->nullable();
-
+            $table->string('uuid');
+            
             $table->rememberToken();
             $table->timestamps();
         });

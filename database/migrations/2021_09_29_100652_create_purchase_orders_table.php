@@ -15,6 +15,7 @@ class CreatePurchaseOrdersTable extends Migration
     {
         Schema::create('purchase_orders', function (Blueprint $table) {
             $table->id();
+            $table->string('uuid');
             $table->foreignId('supplier_id');
             $table->foreignId('created_by');
             $table->foreignId('approved_by')->nullable();

@@ -40,13 +40,14 @@ class OrderDetailController extends Controller
         ], 200);
     }
 
-    public function show(OrderDetail $orderDetail)
+    public function show(Store $store, Branch $branch, Order $order, OrderDetail $orderDetail)
     {
-        
-        return $orderDetail;
+        return response()->json([
+            'data' => $orderDetail,
+        ], 200);
     }
 
-    public function update(Request $request, Order $order, OrderDetail $orderDetail)
+    public function update(Request $request, Store $store, Branch $branch, Order $order, OrderDetail $orderDetail)
     {
         $validated = $request->validate([
             'quantity' => 'nullable|numeric',
@@ -62,14 +63,13 @@ class OrderDetailController extends Controller
         ], 200);
     }
 
-    /**
-     * Remove the specified resource from storage.
-     *
-     * @param  \App\Models\OrderDetail  $orderDetail
-     * @return \Illuminate\Http\Response
-     */
-    public function destroy(Order $order,OrderDetail $orderDetail)
+    public function destroy(Store $store, Branch $branch, Order $order,OrderDetail $orderDetail)
     {
-        return OrderDetail::destroy($orderDetail->id);
+        $isDeleted = OrderDetail::destroy($orderDetail->id);
+        return response()->json([
+            'message' => $isDeleted,
+            'data' => $orderDetail
+        ], 200);
+         
     }
 }

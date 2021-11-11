@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Invoice;
+use App\Models\Store;
+use App\Models\Branch;
 use Illuminate\Http\Request;
 
 class InvoiceController extends Controller
@@ -36,20 +38,22 @@ class InvoiceController extends Controller
             'branch_id' => $branch->id
         ]);
         
-        Invoice::create($invoice);
+        $newInvoice = Invoice::create($invoice);
 
         return response()->json([
             'message' => 'Invoice created',
+            'data' => $newInvoice,
+        ], 200);
+    }
+
+    public function show(Store $store, Branch $branch, Invoice $invoice)
+    {
+        return response()->json([
             'data' => $invoice,
         ], 200);
     }
 
-    public function show(Invoice $invoice)
-    {
-        return $invoice;
-    }
-
-    public function update(Request $request, Invoice $invoice)
+    public function update(Request $request, Store $store, Branch $branch, Invoice $invoice)
     {
         $validated = $request->validate([
             'due_date' => "nullable|date_format:Y-m-d",
@@ -59,10 +63,11 @@ class InvoiceController extends Controller
             'discount' => 'nullable|numeric',
         ]);
 
-        
+        $invoice->update($validated);
+
         return response()->json([
-            'message' => 'Invoice created',
-            'data' => $invoice->update($validated),
+            'message' => 'Invoice updated',
+            'data' => $invoice,
         ], 200);
     }
 
@@ -72,8 +77,12 @@ class InvoiceController extends Controller
      * @param  \App\Models\Invoice  $invoice
      * @return \Illuminate\Http\Response
      */
-    public function destroy(Invoice $invoice)
+    public function destroy(Store $store, Branch $branch, Invoice $invoice)
     {
-        return Invoice::destroy($invoice->id);
+        $isDeleted = Invoice::destroy($invoice->id);
+        return response()->json([
+            'message'=> $isDeleted,
+            'data' => $invoice
+        ], 200);
     }
 }

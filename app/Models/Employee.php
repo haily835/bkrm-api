@@ -26,6 +26,11 @@ class Employee extends Authenticatable implements JWTSubject
         'date_of_birth',
         'status',
         'gender',
+        'uuid',
+        'salary_type',
+        'salary',
+        'id_card_num',
+        'address',
     ];
 
     /**
@@ -33,10 +38,9 @@ class Employee extends Authenticatable implements JWTSubject
      *
      * @var array
      */
-    // protected $hidden = [
-    //     'password',
-    //     'remember_token',
-    // ];
+    protected $hidden = [
+        'id',
+    ];
 
     /**
      * The attributes that should be cast.

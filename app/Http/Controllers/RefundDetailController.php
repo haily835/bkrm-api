@@ -36,7 +36,8 @@ class RefundDetailController extends Controller
         ], 200);
     }
 
-    public function update(Request $request, RefundDetail $refundDetail)
+    public function update(Request $request, Store $store, Branch $branch, 
+                            Refund $refund, RefundDetail $refundDetail)
     {
         $validated = $request->validate([
             'quantity' => 'nullable|numeric',
@@ -50,8 +51,13 @@ class RefundDetailController extends Controller
         ], 200);
     }
 
-    public function destroy(RefundDetail $refundDetail)
+    public function destroy(Store $store, Branch $branch, 
+                            Refund $refund, RefundDetail $refundDetail)
     {
-        return RefundDetail::destroy($refundDetail->id);
+        $isdeleted = RefundDetail::destroy($refundDetail->id);
+        return response()->json([
+            'message' => $isdeleted,
+            'data' => $refundDetail
+        ], 200);
     }
 }

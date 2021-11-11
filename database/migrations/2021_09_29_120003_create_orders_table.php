@@ -15,6 +15,7 @@ class CreateOrdersTable extends Migration
     {
         Schema::create('orders', function (Blueprint $table) {
             $table->id();
+            $table->string('uuid');
             $table->foreignId('user_id');
             $table->foreignId('customer_id');
             $table->foreignId('store_id');
@@ -42,6 +43,7 @@ class CreateOrdersTable extends Migration
 
         Schema::create('invoices', function (Blueprint $table) {
             $table->id();
+            $table->string('uuid');
             $table->foreignId('order_id');
             $table->foreignId('store_id');
             $table->dateTime('due_date');

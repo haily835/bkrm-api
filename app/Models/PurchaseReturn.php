@@ -10,6 +10,9 @@ class PurchaseReturn extends Model
     use HasFactory;
     protected $guarded = [];
 
+    protected $hidden = [
+        'id',
+    ];
 
     function purchaseReturnDetails() {
         return $this->hasMany(PurchaseReturnDetail::class);
