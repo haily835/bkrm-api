@@ -67,9 +67,10 @@ class CategoryController extends Controller
         $newCategory = ['name' => $validated['name']];
 
         if (array_key_exists('parent_category_uuid', $validated)) {
-            $parent_id = Category::where('uuid', $validated['parent_category_uuid'])->first()->id;
-            $newCategory = array_merge($category, ['parent_id' => $parent_id]);
-        
+            if($validated['parent_category_uuid'] != "") {
+                $parent_id = Category::where('uuid', $validated['parent_category_uuid'])->first()->id;
+                $newCategory = array_merge($category, ['parent_id' => $parent_id]);
+            }
         }
 
         $category->update($newCategory);

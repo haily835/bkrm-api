@@ -14,11 +14,36 @@ use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
-
-    public function index(Store $store)
+    public function index(Request $request, Store $store)
     {
-        return $store->products()->paginate(20);
-    
+        $search_key = $request->query("searchKey");
+
+        $products = [];
+
+        if($search_key) {
+            $products = $store->products()->where('name', 'LIKE', '%' . $search_key . '%')
+                                        ->orWhere('bar_code', 'LIKE','%' . $search_key . '%')
+                                        ->get()->toArray();
+        } else {
+            $products = $store->products()->get()->toArray();
+        }
+
+        $data = [];
+
+        foreach($products as $product) {
+            $firstImageUrl = DB::table('images')->where('entity_uuid', $product['uuid'])->get('url')->first();
+            $category = $store->categories->where('id', $product['category_id'])->first();
+            unset($product['category_id']);
+            array_push($data, array_merge($product, [
+                'img_url' => $firstImageUrl->url,
+                'category' => $category,
+            ]));
+
+        }
+
+        return response()->json([
+            'data' => $data,
+        ], 200);
     }
 
     public function store(Request $request, Store $store)
@@ -28,16 +53,17 @@ class ProductController extends Controller
             'list_price' => ['numeric', 'required'],
             'standard_price' => ['numeric', 'required'],
             'category_uuid' => ['string', 'required'],
-            'bar_code' => ['string', 'nullable', 'unique:products'],
+            'bar_code' => ['string', 'nullable'],
             'quantity_per_unit' => ['string', 'nullable'],
             'min_reorder_quantity' => ['numeric', 'nullable'],
             'images' => 'nullable',
             'description' => 'string|nullable',
         ]);
 
+
         $imageUrls = array();
         $product_uuid = (string) Str::uuid();
-
+       
         if (array_key_exists('images', $data)) {
             if ($data['images'] != null) {
                 foreach ($data['images'] as $image) {
@@ -75,6 +101,21 @@ class ProductController extends Controller
 
         $category = Category::where('uuid', $data['category_uuid'])->first();
 
+        
+        $barcode = "";
+        // create barcode if user not specify
+        if (array_key_exists('bar_code', $data)) {
+            if($data['bar_code']) {
+                $barcode = $data['bar_code'];
+            } else {
+                $last_id = count($store->products);
+                $barcode = 'SP' . sprintf( '%04d', $last_id );
+            }
+        } else {
+            $last_id = count($store->products);
+            $barcode = 'SP' . sprintf( '%04d', $last_id );
+        }
+
         $newProduct =  Product::create([
             'store_id' => $store->id,
             'uuid' => $product_uuid,
@@ -82,7 +123,7 @@ class ProductController extends Controller
             'name' => $data['name'],
             'list_price' => $data['list_price'],
             'standard_price' => $data['standard_price'],
-            'bar_code' => array_key_exists('bar_code', $data) ? $data['bar_code'] : "",
+            'bar_code' => $barcode,
             'quantity_per_unit' => array_key_exists('quantity_per_unit', $data) ? $data['quantity_per_unit'] : "cái",
             'min_reorder_quantity' => array_key_exists('min_reorder_quantity', $data) ? $data['min_reorder_quantity'] : 100,
             'description' => array_key_exists('description', $data) ? $data['description'] : "",
@@ -115,43 +156,36 @@ class ProductController extends Controller
         ], 200);
     }
 
+    public function editProduct(Request $request, Store $store, Product $product) {
+        return $request->all();
+    }
+
     public function update(Request $request, Store $store, Product $product)
     {
-        $request->validate([
+        $data = $request->validate([
             'name' => ['nullable', 'string'],
             'list_price' => ['numeric', 'nullable'],
-            'category_uuid' => ['string', 'required'],
             'standard_price' => ['numeric', 'nullable'],
-            'bar_code' => ['string', 'nullable', 'unique:products'],
-            'quantity_per_unit' => ['string', 'nullable', 'nullable'],
+            'category_uuid' => ['string', 'nullable'],
+            'bar_code' => ['string', 'nullable'],
+            'quantity_per_unit' => ['string', 'nullable'],
             'min_reorder_quantity' => ['numeric', 'nullable'],
-            'image' => '',
+            'description' => 'string|nullable',
         ]);
 
+        
 
-        $data = $request->all();
-
-        if ($request['image']) {
-            if (strcmp(gettype($request['image']), 'string')) {
-                $data['image'] = $request['image'];
-            } else {
-                $imagePath = $request['image']->store('product-images', 'public');
-
-                $image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
-                $image->save();
-
-                $data['image'] = 'http://103.163.118.100/bkrm-api/storage/app/public/'
-                    . $imagePath;
-            }
+        if (isset($data['category_uuid'])) {
+            $id = Category::where('uuid', $data['category_uuid'])->first()->id;
+            unset($data['category_uuid']);
+            $product->update(array_merge($data, ['category_id' => $id]));
         } else {
-            $data['image'] = 'http://103.163.118.100/bkrm-api/storage/app/public/'
-                . 'storage/store-images/store-default.png';
+            $product->update($data);
         }
 
-        $product->update($data);
-
         return response()->json([
-            'data' => $product,
+            'message' => "Product updated successfully",
+            'data' => $product
         ], 200);
     }
 
@@ -163,7 +197,6 @@ class ProductController extends Controller
             'data' => $product
         ], 200);
     }
-
 
     public function suppliers(Store $store, Product $product)
     {
@@ -195,7 +228,6 @@ class ProductController extends Controller
 
     public function deleteSupplier(Request $request, Store $store, Product $product, Supplier $supplier)
     {
-
         $product_supplier = ProductSupplier::where('product_id', $product->id)
             ->where('suplier_id', $supplier->id);
 

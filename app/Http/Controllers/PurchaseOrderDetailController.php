@@ -25,7 +25,7 @@ class PurchaseOrderDetailController extends Controller
             'product_id' => 'required|numeric',
             'quantity' => 'required|numeric',
             'unit_cost' => 'required|numeric',
-            'date_received' => 'nullable|date_format:Y-m-d',
+            'date_received' => 'nullable|date_format:Y-m-d H:i:s',
             'posted_to_inventory' => 'required|boolean',
             'status' => 'required|string'
         ]);

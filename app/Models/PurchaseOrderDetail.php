@@ -11,6 +11,6 @@ class PurchaseOrderDetail extends Model
     protected $guarded = [];
 
     protected $casts = [
-        'date_received' => 'datetime:Y-m-d',
+        'date_received' => 'datetime:Y-m-d H:i:s',
     ];
 }

@@ -19,9 +19,20 @@ class PurchaseOrder extends Model
         return $this->hasMany(PurchaseOrderDetail::class);
     }
 
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class);
+    }
+
+    public function supplier()
+    {
+        return $this->belongsTo(Supplier::class);
+    }
+
+
     protected $casts = [
-        'creation_date' => 'datetime:Y-m-d',
-        'approved_date' => 'datetime:Y-m-d',
-        'payment_date' => 'datetime:Y-m-d',
+        'creation_date' => 'datetime:Y-m-d H:i:s',
+        'approved_date' => 'datetime:Y-m-d H:i:s',
+        'payment_date' => 'datetime:Y-m-d H:i:s',
     ];
 }

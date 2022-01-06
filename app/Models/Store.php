@@ -45,4 +45,22 @@ class Store extends Model
     {
         return $this->hasMany(Customer::class);
     }
+
+    public function purchaseOrders(){
+        return $this->hasMany(PurchaseOrder::class);
+    }
+    public function purchaseReturns(){
+        return $this->hasMany(PurchaseReturn::class);
+    }
+    public function refunds(){
+        return $this->hasMany(Refund::class);
+    }
+
+    public function orders() {
+        return $this->hasMany(Order::class);
+    }
+    
+    public function invoices() {
+        return $this->hasMany(Invoice::class);
+    }
 }

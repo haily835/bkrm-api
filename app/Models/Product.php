@@ -13,7 +13,6 @@ class Product extends Model
     protected $hidden = [
         'id',
         'store_id',
-        'category_id'
     ];
 
     public function productPrices()
