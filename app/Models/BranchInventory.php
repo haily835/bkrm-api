@@ -15,4 +15,6 @@ class BranchInventory extends Model
     ];
     
     protected $guarded = [];
+    
+
 }

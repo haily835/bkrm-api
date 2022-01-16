@@ -16,10 +16,66 @@ use App\Models\Employee;
 
 class PurchaseOrderController extends Controller
 {
-    public function index(Store $store, Branch $branch)
+    public function index(Request $request, Store $store, Branch $branch)
     {
+        // extract query string
+        $start_date = $request->query('startDate');
+        $end_date = $request->query('endDate');
+        $min_total_amount = $request->query('minTotalAmount');
+        $max_total_amount = $request->query ('maxTotalAmount');
+        $min_discount = $request->query('minDiscount');
+        $max_discount = $request->query('maxDiscount');
+        $status = $request->query('status');
+        $payment_method = $request->query('paymentMethod');
+        $purchase_order_code = $request->query('purchase_order_code');
+
+        // set up query
+        $queries = [];
+
+        if($purchase_order_code) {
+            array_push($queries, ['purchase_orders.purchase_order_code', 'LIKE', $purchase_order_code]);
+        }
+
+        if($start_date) {
+            array_push($queries, ['purchase_orders.creation_date', '>=', $start_date]);
+        }
+
+        if($end_date) {
+            array_push($queries, ['purchase_orders.creation_date', '<=', $end_date]);
+        }
+
+        if($min_total_amount) {
+            array_push($queries, ['purchase_orders.total_amount', '>=', $min_total_amount]);
+        }
+
+        if($max_total_amount) {
+            array_push($queries, ['purchase_orders.total_amount', '<=', $max_total_amount]);
+        }
+
+        if($min_discount) {
+            array_push($queries, ['purchase_orders.discount', '>=', $min_total_amount]);
+        }
+
+        if($max_discount) {
+            array_push($queries, ['purchase_orders.discount', '<=', $max_discount]);
+        }
+
+        if($status) {
+            array_push($queries, ['purchase_orders.status', '>=', $min_total_amount]);
+        }
+
+        if($payment_method) {
+            array_push($queries, ['purchase_orders.payment_method', '<=', $payment_method]);
+        }
+
+        $purchaseOrders = $branch->purchaseOrders()
+            ->where($queries)
+            ->join('suppliers', 'purchase_orders.supplier_id', '=', 'suppliers.id')
+            ->join('branches', 'purchase_orders.branch_id', '=', 'branches.id')
+            ->select('purchase_orders.*', 'suppliers.name as supplier_name', 'branches.name as branch_name')->get();
+
         return response()->json([
-            'data' => $branch->purchaseOrders,
+            'data' => $purchaseOrders,
         ], 200);
     }
 
@@ -94,7 +150,6 @@ class PurchaseOrderController extends Controller
         foreach ($validated['details'] as $detail) {
             $product_id = $store->products->where('uuid', '=', $detail['uuid'])->first()->id;
             
-
             $inventoryTransaction = InventoryTransaction::create([
                 'uuid' => (string)Str::uuid(),
                 'store_id' => $store->id,
@@ -113,25 +168,28 @@ class PurchaseOrderController extends Controller
                 'posted_to_inventory' => true,
                 'date_received' => $validated['import_date'],
                 'unit_price' => $detail['unit_price'],
-                'quantity' => $detail['quantity']
+                'quantity' => $detail['quantity'],
+                'returned_quantity' => 0,
             ]);
 
             $product = $store->products->where('uuid', '=', $detail['uuid'])->first();
             $newQuantity = (string)((int) $product->quantity_available) + ((int) $detail['quantity']);
             $product->update(['quantity_available' => $newQuantity]);
-            // $productOfStore = BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])->first();
+            
+            // update branch inventory table
+            $productOfStore = BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])->first();
 
-            // if ($productOfStore) {
-            //     $newQuantity = ((float) $productOfStore->quantity_available) + ((float) $detail['quantity']);
-            //     $productOfStore->update(['quantity', $newQuantity]);
-            // } else {
-            //     BranchInventory::create([
-            //         'store_id' => $store->id,
-            //         'branch_id' => $branch->id,
-            //         'product_id' => $product_id,
-            //         'quantity_available' => $detail['quantity'],
-            //     ]);
-            // }
+            if ($productOfStore) {
+                BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])
+                    ->increment('quantity_available', $detail['quantity']);
+            } else {
+                BranchInventory::create([
+                    'store_id' => $store->id,
+                    'branch_id' => $branch->id,
+                    'product_id' => $product_id,
+                    'quantity_available' => $detail['quantity'],
+                ]);
+            }
         }
 
         return response()->json([

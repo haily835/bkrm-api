@@ -105,19 +105,21 @@ class RefundController extends Controller
             $product = $store->products->where('id', '=', $detail['product_id'])->first();
             $newQuantity = (string)((int) $product->quantity_available) + ((int) $detail['quantity']);
             $product->update(['quantity_available' => $newQuantity]);
-            // $productOfStore = BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])->first();
+            
+            // update branch inventory table
+            $productOfStore = BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product->id]])->first();
 
-            // if ($productOfStore) {
-            //     $newQuantity = ((float) $productOfStore->quantity_available) + ((float) $detail['quantity']);
-            //     $productOfStore->update(['quantity', $newQuantity]);
-            // } else {
-            //     BranchInventory::create([
-            //         'store_id' => $store->id,
-            //         'branch_id' => $branch->id,
-            //         'product_id' => $product_id,
-            //         'quantity_available' => $detail['quantity'],
-            //     ]);
-            // }
+            if ($productOfStore) {
+                BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product->id]])
+                    ->increment('quantity_available', $detail['quantity']);
+            } else {
+                BranchInventory::create([
+                    'store_id' => $store->id,
+                    'branch_id' => $branch->id,
+                    'product_id' => $product->id,
+                    'quantity_available' => $detail['quantity'],
+                ]);
+            }
         }
 
         return response()->json([
@@ -126,10 +128,66 @@ class RefundController extends Controller
         ], 200);
     }
 
-    public function index(Store $store, Branch $branch)
+    public function index(Request $request, Store $store, Branch $branch)
     {
+        // extract query string
+        $start_date = $request->query('startDate');
+        $end_date = $request->query('endDate');
+        $min_total_amount = $request->query('minTotalAmount');
+        $max_total_amount = $request->query ('maxTotalAmount');
+        $status = $request->query('status');
+        $payment_method = $request->query('paymentMethod');
+        $order_code = $request->query('orderCode');
+        $refund_code = $request->query('refundCode');
+
+        // set up query
+        $queries = [];
+
+        if ($refund_code) {
+            array_push($queries, ['refunds.refund_code', 'LIKE', $refund_code]);
+        }
+
+        if($start_date) {
+            array_push($queries, ['refunds.created_at', '>=', $start_date]);
+        }
+
+        if($end_date) {
+            array_push($queries, ['refunds.created_at', '<=', $end_date]);
+        }
+
+        if($min_total_amount) {
+            array_push($queries, ['refunds.total_amount', '>=', $min_total_amount]);
+        }
+
+        if($max_total_amount) {
+            array_push($queries, ['refunds.total_amount', '<=', $max_total_amount]);
+        }
+
+        
+        if($status) {
+            array_push($queries, ['refunds.status', '>=', $min_total_amount]);
+        }
+
+        if($payment_method) {
+            array_push($queries, ['payment_method', '<=', $payment_method]);
+        }
+
+        if($order_code) {
+            $order = $store->orders()->where('order_code', $order_code)->first();
+            if ($order) {
+                array_push($queries, ['order_id', '=', $order->id]);
+            }
+        }
+
+        $refunds = $branch->refunds()
+            ->where($queries)
+            ->join('customers', 'refunds.customer_id', '=', 'customers.id')
+            ->join('branches', 'refunds.branch_id', '=', 'branches.id')
+            ->select('refunds.*', 'customers.name as customer_name', 'branches.name as branch_name')->get();
+        
+        
         return response()->json([
-            'data' => $branch->refunds,
+            'data' => $refunds,
         ], 200);
     }
 
@@ -170,10 +228,27 @@ class RefundController extends Controller
         ], 200);
     }
 
-    public function show(Store $store, Branch $branch, Refund $refund)
+    public function show(Store $store, Refund $refund)
     {
+        $details = $refund->refundDetails()
+        ->join('products', 'refund_details.product_id', '=', 'products.id')
+        ->select('refund_details.*', 'products.name', 'products.bar_code')->get();
+
+        if ($refund->created_user_type === 'owner') {
+            $created_by = User::where('id', $refund->created_by)->first();
+        } else {
+            $created_by = Employee::where('id', $refund->created_by)->first();
+        }
+        $data = array_merge([
+            'customer' => $refund->customer,
+            'branch' => $refund->branch,
+            'details' => $details,
+            'order'=> $refund->order,
+            'created_by_user' => $created_by,
+        ], $refund->toArray());
+
         return response()->json([
-            'data' => $refund,
+            'data' => $data
         ], 200);
     }
 

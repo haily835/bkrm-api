@@ -2,19 +2,108 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\BranchInventory;
 use Illuminate\Http\Request;
 use App\Models\Product;
 use App\Models\Store;
 use App\Models\Supplier;
 use App\Models\Category;
 use App\Models\ProductSupplier;
+use App\Models\Branch;
 use Intervention\Image\Facades\Image;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 
 class ProductController extends Controller
 {
+    public function indexOfBranch(Request $request, Store $store, Branch $branch)
+    {
+        $search_key = $request->query("searchKey");
+
+        $products = [];
+
+        if($search_key) {
+            $products = $store->products()->where('name', 'LIKE', '%' . $search_key . '%')
+                                        ->orWhere('bar_code', 'LIKE','%' . $search_key . '%')
+                                        ->where('status', '<>', 'inactive')
+                                        ->where('status', '<>', 'deleted')
+                                        ->get()->toArray();
+        } else {
+            $products = $store->products()
+                ->where('status', '<>', 'deleted')
+                ->get()->toArray();
+        }
+
+        $data = [];
+
+        foreach($products as $product) {
+            $firstImageUrl = DB::table('images')->where('entity_uuid', $product['uuid'])->get('url')->first();
+            $category = $store->categories->where('id', $product['category_id'])->first();
+            unset($product['category_id']);
+
+            // get branch inventory of that product
+            $branch_product = $branch->inventory()->where('product_id', $product['id'])->first();
+
+            if($branch_product) {
+                $branch_quantity = $branch_product->quantity_available;
+            } else {
+                BranchInventory::create([
+                    'store_id' => $store->id,
+                    'branch_id' => $branch->id,
+                    'product_id' => $product['id'],
+                    'quantity_available' => 0,
+                ]);
+                $branch_quantity = 0;
+            }
+
+            array_push($data, array_merge($product, [
+                'img_url' => $firstImageUrl->url,
+                'category' => $category,
+                'branch_quantity' => $branch_quantity,
+            ]));
+        }
+
+        return response()->json([
+            'data' => $data,
+        ], 200);
+    }
+
     public function index(Request $request, Store $store)
+    {
+        $search_key = $request->query("searchKey");
+
+        $products = [];
+
+        if($search_key) {
+            $products = $store->products()->where('name', 'LIKE', '%' . $search_key . '%')
+                                        ->orWhere('bar_code', 'LIKE','%' . $search_key . '%')
+                                        ->where('status', '<>', 'inactive')
+                                        ->where('status', '<>', 'deleted')
+                                        ->get()->toArray();
+        } else {
+            $products = $store->products()
+                ->where('status', '<>', 'deleted')
+                ->get()->toArray();
+        }
+
+        $data = [];
+
+        foreach($products as $product) {
+            $firstImageUrl = DB::table('images')->where('entity_uuid', $product['uuid'])->get('url')->first();
+            $category = $store->categories->where('id', $product['category_id'])->first();
+            unset($product['category_id']);
+            array_push($data, array_merge($product, [
+                'img_url' => $firstImageUrl->url,
+                'category' => $category,
+            ]));
+        }
+
+        return response()->json([
+            'data' => $data,
+        ], 200);
+    }
+
+    public function searchBranchInventory(Request $request, Store $store, Branch $branch)
     {
         $search_key = $request->query("searchKey");
 
@@ -34,11 +123,27 @@ class ProductController extends Controller
             $firstImageUrl = DB::table('images')->where('entity_uuid', $product['uuid'])->get('url')->first();
             $category = $store->categories->where('id', $product['category_id'])->first();
             unset($product['category_id']);
+
+            // get branch inventory of that product
+            $branch_product = $branch->inventory()->where('product_id', $product['id'])->first();
+
+            if($branch_product) {
+                $branch_quantity = $branch_product->quantity_available;
+            } else {
+                BranchInventory::create([
+                    'store_id' => $store->id,
+                    'branch_id' => $branch->id,
+                    'product_id' => $product['id'],
+                    'quantity_available' => 0,
+                ]);
+                $branch_quantity = 0;
+            }
+
             array_push($data, array_merge($product, [
                 'img_url' => $firstImageUrl->url,
                 'category' => $category,
+                'branch_quantity' => $branch_quantity,
             ]));
-
         }
 
         return response()->json([
@@ -131,6 +236,16 @@ class ProductController extends Controller
             'has_variance' => false,
             'on_sale' => false,
         ]);
+        
+        // add new product to each branch inventory
+        foreach($store->branches as $branch) {
+            BranchInventory::create([
+                'store_id' => $store->id,
+                'branch_id' => $branch->id,
+                'product_id' => $newProduct->id,
+                'quantity_available' => 0,
+            ]);
+        }
 
         return response()->json([
             'message' => "Product created successfully",
@@ -191,9 +306,27 @@ class ProductController extends Controller
 
     public function destroy(Store $store, Product $product)
     {
-        $isDeleted = Product::destroy($product->id);
+        $product->update(['status', 'deleted']);
         return response()->json([
-            'message' => $isDeleted,
+            'message' => true,
+            'data' => $product
+        ], 200);
+    }
+
+    public function active(Store $store, Product $product)
+    {
+        $product->update(['status', 'active']);
+        return response()->json([
+            'message' => true,
+            'data' => $product
+        ], 200);
+    }
+
+    public function inactive(Store $store, Product $product)
+    {
+        $product->update(['status', 'inactive']);
+        return response()->json([
+            'message' => true,
             'data' => $product
         ], 200);
     }

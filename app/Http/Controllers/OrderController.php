@@ -13,14 +13,74 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\Employee;
+use App\Models\BranchInventory;
 
 class OrderController extends Controller
 {
-    public function index(Store $store, Branch $branch)
+    public function index(Request $request, Store $store, Branch $branch)
     {
+        // extract query string
+        $start_date = $request->query('startDate');
+        $end_date = $request->query('endDate');
+        $min_total_amount = $request->query('minTotalAmount');
+        $max_total_amount = $request->query ('maxTotalAmount');
+        $min_discount = $request->query('minDiscount');
+        $max_discount = $request->query('maxDiscount');
+        $status = $request->query('status');
+        $payment_method = $request->query('paymentMethod');
+        $order_code = $request->query('orderCode');
+
+        // set up query
+        $queries = [];
+
+        if($order_code) {
+            array_push($queries, ['orders.order_code', 'LIKE', $order_code]);
+        }
+
+
+        if($start_date) {
+            array_push($queries, ['orders.created_at', '>=', $start_date . ' 00:00:00']);
+        }
+
+        if($end_date) {
+            array_push($queries, ['orders.created_at', '<=', $end_date . ' 00:00:00']);
+        }
+
+        if($min_total_amount) {
+            array_push($queries, ['orders.total_amount', '>=', $min_total_amount]);
+        }
+
+        if($max_total_amount) {
+            array_push($queries, ['orders.total_amount', '<=', $max_total_amount]);
+        }
+
+        if($min_discount) {
+            array_push($queries, ['orders.discount', '>=', $min_total_amount]);
+        }
+
+        if($max_discount) {
+            array_push($queries, ['orders.discount', '<=', $max_discount]);
+        }
+
+        if($status) {
+            array_push($queries, ['orders.status', '>=', $min_total_amount]);
+        }
+
+        if($payment_method) {
+            array_push($queries, ['payment_method', '<=', $payment_method]);
+        }
+
+        $orders = $branch->orders()
+            ->where($queries)
+            ->join('customers', 'orders.customer_id', '=', 'customers.id')
+            ->join('branches', 'orders.branch_id', '=', 'branches.id')
+            ->select('orders.*', 'customers.name as customer_name', 'branches.name as branch_name')->get();
+        
+        
         return response()->json([
-            'data' => $branch->orders,
+            'data' => $orders,
         ], 200);
+        
     }
 
     public function getStoreOrder(Store $store) {
@@ -123,6 +183,22 @@ class OrderController extends Controller
             $product = $store->products->where('uuid', '=', $detail['uuid'])->first();
             $newQuantity = (string)((int) $product->quantity_available) - ((int) $detail['quantity']);
             $product->update(['quantity_available' => $newQuantity]);
+
+
+            // update branch inventory table
+            $productOfStore = BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])->first();
+
+            if ($productOfStore) {
+                BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])
+                    ->decrement('quantity_available', $detail['quantity']);
+            } else {
+                BranchInventory::create([
+                    'store_id' => $store->id,
+                    'branch_id' => $branch->id,
+                    'product_id' => $product_id,
+                    'quantity_available' => $detail['quantity'],
+                ]);
+            }
         }
 
         # generate code

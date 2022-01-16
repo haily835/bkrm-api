@@ -16,7 +16,6 @@ class Branch extends Model
         'store_id'
     ];
 
-
     public function orders()
     {
         return $this->hasMany(Order::class);
@@ -40,5 +39,10 @@ class Branch extends Model
     public function invoices()
     {
         return $this->hasMany(Invoice::class);
+    }
+
+    public function inventory()
+    {
+        return $this->hasMany(BranchInventory::class);
     }
 }

@@ -9,10 +9,25 @@ use Illuminate\Http\Request;
 
 class CategoryController extends Controller
 {
-    public function index(Store $store)
-    {
+    public function index(Store $store) {
         return response()->json([
-            'data' => $store->categories
+            'data' => $store->categories,
+        ], 200);
+    }
+
+    public function getParentCategory(Store $store)
+    {
+        $categories = $store->categories()->whereNull('parent_category_id')->get();
+
+        $data = [];
+        
+        foreach($categories as $category) {
+            $children = $category->children;
+            array_push($data, array_merge($category->toArray(), ['children' => $children]));
+        }
+
+        return response()->json([
+            'data' => $categories
         ], 200);
     }
 
@@ -37,7 +52,7 @@ class CategoryController extends Controller
 
         if ($validated['parent_category_uuid']) {
             $parent_id = Category::where('uuid', $validated['parent_category_uuid'])->first()->id;
-            $category = array_merge($category, ['parent_id' => $parent_id]);
+            $category = array_merge($category, ['parent_category_id' => $parent_id]);
         }
 
         $created = Category::create(array_merge($category, [
@@ -52,8 +67,17 @@ class CategoryController extends Controller
 
     public function show(Store $store, Category $category)
     {
+        $children = $category->children;
+
+        $data = [];
+
+        foreach($children as $child) {
+            $grand_children = $child->children;
+            array_push($data, array_merge($child->toArray(), ['children' => $grand_children]));
+        }
+
         return response()->json([
-            'data'=> $category
+            'data'=> $data
         ]);
     }
 
@@ -69,7 +93,7 @@ class CategoryController extends Controller
         if (array_key_exists('parent_category_uuid', $validated)) {
             if($validated['parent_category_uuid'] != "") {
                 $parent_id = Category::where('uuid', $validated['parent_category_uuid'])->first()->id;
-                $newCategory = array_merge($category, ['parent_id' => $parent_id]);
+                $newCategory = array_merge($category, ['parent_category_id' => $parent_id]);
             }
         }
 

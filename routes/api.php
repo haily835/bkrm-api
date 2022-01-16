@@ -85,12 +85,15 @@ Route::group(['middleware' => ['auth:user']], function () {
     Route::delete('/stores/{store:uuid}/products/{product:uuid}/suppliers/{supplier}', [ProductController::class, 'deleteSupplier']);
 
     Route::get('/stores/{store:uuid}/products', [ProductController::class, 'index']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/products', [ProductController::class, 'indexOfBranch']);
     Route::get('/stores/{store:uuid}/search-products', [ProductController::class, 'search']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/search-products', [ProductController::class, 'searchBranchInventory']);
     Route::post('/stores/{store:uuid}/products', [ProductController::class, 'store']);
     Route::put('/stores/{store:uuid}/products/{product:uuid}', [ProductController::class, 'update']);
     Route::get('/stores/{store:uuid}/products/{product:uuid}', [ProductController::class, 'show']);
     Route::delete('/stores/{store:uuid}/products/{product:uuid}', [ProductController::class, 'destroy']);
-
+    Route::post('/stores/{store:uuid}/products/{product:uuid}/active', [ProductController::class, 'active']);
+    Route::post('/stores/{store:uuid}/products/{product:uuid}/inactive', [ProductController::class, 'inactive']);
 
     Route::get('/stores/{store:uuid}/branches', [BranchController::class, 'index']);
     Route::post('/stores/{store:uuid}/branches', [BranchController::class, 'store']);
@@ -122,7 +125,7 @@ Route::group(['middleware' => ['auth:user']], function () {
     Route::post('/stores/{store:uuid}/branches/{branch:uuid}/refunds', [RefundController::class, 'store']);
     Route::post('/stores/{store:uuid}/branches/{branch:uuid}/refunds/removeInventory', [RefundController::class, 'removeInventory']);
     Route::put('/stores/{store:uuid}/branches/{branch:uuid}/refunds/{refund:uuid}', [RefundController::class, 'update']);
-    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/refunds/{refund:uuid}', [RefundController::class, 'show']);
+    Route::get('/stores/{store:uuid}/refunds/{refund:uuid}', [RefundController::class, 'show']);
     Route::delete('/stores/{store:uuid}/branches/{branch:uuid}/refunds/{refund:uuid}', [RefundController::class, 'destroy']);
 
     Route::get('/stores/{store:uuid}/branches/{branch:uuid}/refunds/{refund:uuid}/details', [RefundDetailController::class, 'index']);
@@ -144,10 +147,11 @@ Route::group(['middleware' => ['auth:user']], function () {
     Route::delete('/stores/{store:uuid}/branches/{branch:uuid}/purchase-orders/{purchaseOrder:uuid}/details/{purchaseOrderDetail}', [PurchaseOrderDetailController::class, 'destroy']);
 
     Route::get('/stores/{store:uuid}/purchase-returns', [PurchaseReturnController::class, 'getStorePurchaseReturn']);
+    Route::get('/stores/{store:uuid}/purchase-returns/{purchaseReturn:uuid}', [PurchaseReturnController::class, 'show']);
     Route::get('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns', [PurchaseReturnController::class, 'index']);
     Route::post('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns', [PurchaseReturnController::class, 'store']);
     Route::post('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns/removeInventory', [PurchaseReturnController::class, 'removeInventory']);
-    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns/{purchaseReturn:uuid}', [PurchaseReturnController::class, 'show']);
+    // Route::get('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns/{purchaseReturn:uuid}', [PurchaseReturnController::class, 'show']);
     Route::put('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns/{purchaseReturn:uuid}', [PurchaseReturnController::class, 'update']);
     Route::delete('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns/{purchaseReturn:uuid}', [PurchaseReturnController::class, 'destroy']);
 
@@ -169,6 +173,7 @@ Route::group(['middleware' => ['auth:user']], function () {
     Route::delete('/stores/{store:uuid}/customers/{customer:uuid}', [CustomerController::class, 'destroy']);
 
     Route::get('/stores/{store:uuid}/categories', [CategoryController::class, 'index']);
+    Route::get('/stores/{store:uuid}/categories/parent', [CategoryController::class, 'getParentCategory']);
     Route::post('/stores/{store:uuid}/categories', [CategoryController::class, 'store']);
     Route::get('/stores/{store:uuid}/categories/{category:uuid}', [CategoryController::class, 'show']);
     Route::put('/stores/{store:uuid}/categories/{category:uuid}', [CategoryController::class, 'update']);

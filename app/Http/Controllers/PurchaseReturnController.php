@@ -16,10 +16,66 @@ use Illuminate\Support\Str;
 
 class PurchaseReturnController extends Controller
 {
-    public function index(Store $store, Branch $branch)
+    public function index(Request $request, Store $store, Branch $branch)
     {
+        // extract query string
+        $start_date = $request->query('startDate');
+        $end_date = $request->query('endDate');
+        $min_total_amount = $request->query('minTotalAmount');
+        $max_total_amount = $request->query ('maxTotalAmount');
+        $min_discount = $request->query('minDiscount');
+        $max_discount = $request->query('maxDiscount');
+        $status = $request->query('status');
+        $payment_method = $request->query('paymentMethod');
+        $purchase_order_code = $request->query('purchaseOrderCode');
+        $purchase_return_code = $request->query('purchaseReturnCode');
+
+        // set up query
+        $queries = [];
+
+        if($purchase_return_code) {
+            array_push($queries, ['purchase_returns.purchase_return_code', 'LIKE', $purchase_return_code]);
+        }
+
+        if($start_date) {
+            array_push($queries, ['purchase_returns.creation_date', '>=', $start_date]);
+        }
+
+        if($end_date) {
+            array_push($queries, ['purchase_returns.creation_date', '<=', $end_date]);
+        }
+
+        if($min_total_amount) {
+            array_push($queries, ['purchase_returns.total_amount', '>=', $min_total_amount]);
+        }
+
+        if($max_total_amount) {
+            array_push($queries, ['purchase_returns.total_amount', '<=', $max_total_amount]);
+        }
+
+        if($status) {
+            array_push($queries, ['purchase_returns.status', '>=', $min_total_amount]);
+        }
+
+        if($payment_method) {
+            array_push($queries, ['purchase_returns.payment_method', '<=', $payment_method]);
+        }
+
+        if($purchase_order_code) {
+            $purchase_order = $store->purchaseOrders()->where('purchase_order_code', $purchase_order_code)->first();
+            if($purchase_order) {
+                array_push($queries, ['purchase_order_id', '=', $purchase_order->id]);
+            }
+        }
+
+        $purchaseReturns = $branch->purchaseReturns()
+            ->where($queries)
+            ->join('suppliers', 'purchase_returns.supplier_id', '=', 'suppliers.id')
+            ->join('branches', 'purchase_returns.branch_id', '=', 'branches.id')
+            ->select('purchase_returns.*', 'suppliers.name as supplier_name', 'branches.name as branch_name')->get();
+
         return response()->json([
-            'data' => $branch->purchaseReturns,
+            'data' => $purchaseReturns,
         ], 200);
     }
 
@@ -64,7 +120,8 @@ class PurchaseReturnController extends Controller
 
         $creation_date = $approved_date = $validated['export_date'];
 
-        $purchase_order_id = $store->purchaseOrders()->where('uuid',$validated['purchase_order_uuid'])->first()->id;
+        $purchase_order = $store->purchaseOrders()->where('uuid',$validated['purchase_order_uuid'])->first();
+        $purchase_order_id = $purchase_order->id;
 
         $last_id = $store->purchaseReturns()->count();
 
@@ -109,22 +166,27 @@ class PurchaseReturnController extends Controller
                 'quantity' => $detail['quantity']
             ]);
 
+            $purchase_order->purchaseOrderDetails()->where('product_id', $detail['product_id'])
+                ->increment('returned_quantity', $detail['quantity']);
+            
             $product = $store->products->where('id', '=', $detail['product_id'])->first();
             $newQuantity = (string)((int) $product->quantity_available) - ((int) $detail['quantity']);
             $product->update(['quantity_available' => $newQuantity]);
-            // $productOfStore = BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])->first();
+            
+            $productOfStore = BranchInventory::where([
+                ['branch_id', '=', $branch->id], ['product_id', '=', $detail['product_id']]])->first();
 
-            // if ($productOfStore) {
-            //     $newQuantity = ((float) $productOfStore->quantity_available) + ((float) $detail['quantity']);
-            //     $productOfStore->update(['quantity', $newQuantity]);
-            // } else {
-            //     BranchInventory::create([
-            //         'store_id' => $store->id,
-            //         'branch_id' => $branch->id,
-            //         'product_id' => $product_id,
-            //         'quantity_available' => $detail['quantity'],
-            //     ]);
-            // }
+            if ($productOfStore) {
+                BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $detail['product_id']]])
+                    ->decrement('quantity_available', $detail['quantity']);
+            } else {
+                BranchInventory::create([
+                    'store_id' => $store->id,
+                    'branch_id' => $branch->id,
+                    'product_id' => $detail['product_id'],
+                    'quantity_available' => $detail['quantity'],
+                ]);
+            }
         }
 
         return response()->json([
@@ -161,8 +223,25 @@ class PurchaseReturnController extends Controller
     }
 
     public function show(Store $store, Branch $branch, PurchaseReturn $purchaseReturn) {
+        $details = $purchaseReturn->purchaseReturnDetails()
+        ->join('products', 'purchase_return_details.product_id', '=', 'products.id')
+        ->select('purchase_return_details.*', 'products.name', 'products.bar_code')->get();
+
+        if ($purchaseReturn->created_user_type === 'owner') {
+            $created_by = User::where('id', $purchaseReturn->created_by)->first();
+        } else {
+            $created_by = Employee::where('id', $purchaseReturn->created_by)->first();
+        }
+        $data = array_merge([
+            'supplier' => $purchaseReturn->supplier,
+            'branch' => $purchaseReturn->branch,
+            'details' => $details,
+            'created_by_user' => $created_by,
+            'purchase_order'=> $purchaseReturn->purchaseOrder
+        ], $purchaseReturn->toArray());
+
         return response()->json([
-            'data' => $purchaseReturn,
+            'data' => $data
         ], 200);
     }
     

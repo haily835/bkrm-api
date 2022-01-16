@@ -30,7 +30,6 @@ class BranchController extends Controller
             'status' => 'nullable|in:active,inactive',
         ]);
 
-        
         $branch = Branch::create(array_merge($data, [
             'store_id' => $store->id,
             'uuid' => (string) Str::uuid(),

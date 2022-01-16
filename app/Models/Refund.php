@@ -17,4 +17,16 @@ class Refund extends Model
     function refundDetails() {
         return $this->hasMany(RefundDetail::class);
     }
+
+    public function customer() {
+        return $this->belongsTo(Customer::class);
+    }
+
+    public function branch() {
+        return $this->belongsTo(Branch::class);
+    }
+
+    public function order() {
+        return $this->belongsTo(Order::class);
+    }
 }
