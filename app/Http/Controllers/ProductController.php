@@ -306,9 +306,9 @@ class ProductController extends Controller
 
     public function destroy(Store $store, Product $product)
     {
-        $product->update(['status', 'deleted']);
+        $product->update(['status' => 'deleted']);
         return response()->json([
-            'message' => true,
+            'message' => 1,
             'data' => $product
         ], 200);
     }

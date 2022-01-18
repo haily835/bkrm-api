@@ -63,4 +63,8 @@ class Employee extends Authenticatable implements JWTSubject
     public function getJWTCustomClaims() {
         return [];
     }
+
+    public function priviledges() {
+        return $this->belongsToMany(Priviledge::class);
+    }
 }

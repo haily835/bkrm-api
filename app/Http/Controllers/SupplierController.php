@@ -13,7 +13,7 @@ class SupplierController extends Controller
     public function index(Store $store)
     {
         return response()->json([
-            'data' => $store->suppliers,
+            'data' => $store->suppliers()->where('status', '<>', 'deleted')->get(),
         ], 200);
     }
 
@@ -81,10 +81,19 @@ class SupplierController extends Controller
 
     public function destroy(Store $store, Supplier $supplier)
     {
-        $isdeleted = Supplier::destroy($supplier->id);
-        return response()->json([
-            'message' => $isdeleted,
+        $numOfSupplier = $store->suppliers()->where('status', 'active')->count();  
+        if ($numOfSupplier <= 1) {
+            return response()->json([
+            'message' => 'Can not delete last supplier',
             'data' => $supplier
+        ], 404);
+        }
+
+
+        $supplier->update(['status' => 'deleted']);
+        return response()->json([
+            'message' => 1,
+            'data' => $numOfSupplier
         ], 200);
     }
 }

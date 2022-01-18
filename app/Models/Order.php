@@ -27,7 +27,6 @@ class Order extends Model
         return $this->belongsTo(Branch::class);
     }
 
-
     protected $casts = [
         'paid_date' => 'datetime:Y-m-d H:i:s',
         'creation_date' => 'datetime:Y-m-d H:i:s',

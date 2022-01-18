@@ -7,6 +7,7 @@ use App\Models\Store;
 use App\Models\Employee;
 use Spatie\Permission\Models\Permission;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class EmployeeController extends Controller
 {
@@ -53,7 +54,9 @@ class EmployeeController extends Controller
         $newEmployee = Employee::create($employee);
 
         foreach($fields['permissions'] as $permission) {
-            $newEmployee->givePermissionTo($permission);
+            DB::table('employee_priviledge')->insert(
+                ['employee_id' => $newEmployee->id, 'priviledge_id' => $permission]
+            );
         }
 
        
@@ -67,9 +70,9 @@ class EmployeeController extends Controller
     {
         $fields = $request->validate([
             'name' => 'nullable|string',
-            'email' => 'nullable|string|unique:employees,email',
+            'email' => 'nullable|string',
             'password' => 'nullable|string|confirmed',
-            'phone' => 'nullable|string|unique:employees',
+            'phone' => 'nullable|string',
             'date_of_birth' => 'nullable|date_format:Y-m-d',
             'status' =>'nullable|in:active,inactive',
             'gender' => 'nullable|in:male,female',
@@ -93,9 +96,9 @@ class EmployeeController extends Controller
     }
 
     public function show(Store $store, Employee $employee) {
-        $permissions = $employee->getAllPermissions();
+        // $permissions = $employee->getAllPermissions();
         return response()->json([
-            'data' => array_merge($employee->toArray(), ['permissions' => $permissions])
+            'data' => array_merge($employee->toArray(), ['permissions' => $employee->priviledges])
         ], 200); 
     }
 

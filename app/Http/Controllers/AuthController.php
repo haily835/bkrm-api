@@ -163,11 +163,26 @@ class AuthController extends Controller
     }
 
     protected function createNewEmpToken($token){
+        $user = Auth::guard('employee')->user();
+        $store = Store::where('user_id', $user->store_id)->get()[0];
+        // return response()->json([
+        //     'access_token' => $token,
+        //     'store' => $store,
+        //     'token_type' => 'bearer',
+        //     'expires_in' => auth()->factory()->getTTL() * 60,
+        //     'user' => Auth::guard('employee')->user(),
+        //     'permissions' => array_map(function ($p) {
+        //             return $p['name'];
+        //         }, $user->getAllPermissions()->toArray()),
+        // ]);
+
         return response()->json([
             'access_token' => $token,
+            'store' => $store,
             'token_type' => 'bearer',
             'expires_in' => auth()->factory()->getTTL() * 60,
-            'user' => Auth::guard('employee')->user()
+            'user' => Auth::guard('employee')->user(),
+            'permissions' => $user->priviledges,
         ]);
     }
 
@@ -186,8 +201,11 @@ class AuthController extends Controller
                 'role'=> 'owner',
             ]);
         } else if (Auth::guard('employee')->user()){
+            $user = Auth::guard('employee')->user();
+            $store = Store::where('user_id', $user->store_id)->get()[0];
             return response()->json([
-                'data' => Auth::guard('employee')->user(),
+                'user' => Auth::guard('employee')->user(),
+                'store' => $store,
                 'role'=> 'employee',
             ]);
         } else {
