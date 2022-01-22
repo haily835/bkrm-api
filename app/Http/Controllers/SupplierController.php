@@ -70,6 +70,7 @@ class SupplierController extends Controller
             'city' => 'nullable|string',
             'province' => 'nullable|string',
             'payment_info' => 'nullable|string',
+            'status' => 'nullable|string',
         ]);
 
         $supplier->update($validated);
@@ -85,7 +86,7 @@ class SupplierController extends Controller
         if ($numOfSupplier <= 1) {
             return response()->json([
             'message' => 'Can not delete last supplier',
-            'data' => $supplier
+            'data' => $numOfSupplier
         ], 404);
         }
 

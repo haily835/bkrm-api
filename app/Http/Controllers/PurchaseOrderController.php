@@ -61,7 +61,7 @@ class PurchaseOrderController extends Controller
         }
 
         if($status) {
-            array_push($queries, ['purchase_orders.status', '>=', $min_total_amount]);
+            array_push($queries, ['purchase_orders.status', '==', $status]);
         }
 
         if($payment_method) {

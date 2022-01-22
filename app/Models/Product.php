@@ -44,5 +44,22 @@ class Product extends Model
     {
         return $this->belongsTo(Category::class);
     }
+
+    public function purchaseOrderDetails()
+    {
+        return $this->belongsToMany(PurchaseOrderDetail::class);
+    }
+    public function orderDetails()
+    {
+        return $this->hasMany(OrderDetail::class);
+    }
+    public function refundDetails()
+    {
+        return $this->belongsToMany(RefundDetail::class);
+    }
+    public function purchaseReturnDetails()
+    {
+        return $this->hasMany(PurchaseReturnDetail::class);
+    }
 }
   

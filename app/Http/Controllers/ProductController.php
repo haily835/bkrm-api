@@ -13,6 +13,7 @@ use App\Models\Branch;
 use Intervention\Image\Facades\Image;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use App\Models\Barcode;
 
 class ProductController extends Controller
 {
@@ -23,11 +24,13 @@ class ProductController extends Controller
         $products = [];
 
         if($search_key) {
-            $products = $store->products()->where('name', 'LIKE', '%' . $search_key . '%')
-                                        ->orWhere('bar_code', 'LIKE','%' . $search_key . '%')
-                                        ->where('status', '<>', 'inactive')
-                                        ->where('status', '<>', 'deleted')
-                                        ->get()->toArray();
+            $products = $store->products()
+                ->where('store_id', $store->id)
+                ->where('name', 'LIKE', '%' . $search_key . '%')
+                // ->orWhere('bar_code', 'LIKE','%' . $search_key . '%')
+                ->where('status', '<>', 'inactive')
+                ->where('status', '<>', 'deleted')
+                ->get()->toArray();
         } else {
             $products = $store->products()
                 ->where('status', '<>', 'deleted')
@@ -110,9 +113,11 @@ class ProductController extends Controller
         $products = [];
 
         if($search_key) {
-            $products = $store->products()->where('name', 'LIKE', '%' . $search_key . '%')
-                                        ->orWhere('bar_code', 'LIKE','%' . $search_key . '%')
-                                        ->get()->toArray();
+            $products = $store->products()
+                ->where('name', 'LIKE', '%' . $search_key . '%')
+                // ->orWhere('bar_code', 'LIKE','%' . $search_key . '%')
+                ->get()
+                ->toArray();
         } else {
             $products = $store->products()->get()->toArray();
         }
@@ -163,12 +168,26 @@ class ProductController extends Controller
             'min_reorder_quantity' => ['numeric', 'nullable'],
             'images' => 'nullable',
             'description' => 'string|nullable',
+            'img_url' => 'nullable|string'
         ]);
-
+        
+        $product_uuid = (string) Str::uuid();
 
         $imageUrls = array();
-        $product_uuid = (string) Str::uuid();
-       
+
+        if (array_key_exists('img_url', $data)) {
+            if ($data['img_url']) {
+                DB::table('images')->insert([
+                    'uuid' => (string) Str::uuid(),
+                    'url' => $data['img_url'],
+                    'store_id' => $store->id,
+                    'entity_uuid' => $product_uuid,
+                    'image_type' => 'product'
+                ]);
+            }
+            array_push($imageUrls, $data['img_url']);
+        }
+        
         if (array_key_exists('images', $data)) {
             if ($data['images'] != null) {
                 foreach ($data['images'] as $image) {
@@ -286,9 +305,55 @@ class ProductController extends Controller
             'quantity_per_unit' => ['string', 'nullable'],
             'min_reorder_quantity' => ['numeric', 'nullable'],
             'description' => 'string|nullable',
+            'deleted_urls' => 'nullable|array',
+            'new_images' => 'nullable',
         ]);
 
-        
+        if (isset($data['deleted_urls'])) {
+            if($data['deleted_urls']) {
+                DB::table('images')->where('entity_uuid', $product['uuid'])
+                    ->whereIn('url', $data['deleted_urls'])->delete();
+            }
+        }
+
+        if (array_key_exists('images', $data)) {
+            if ($data['images'] != null) {
+                foreach ($data['images'] as $image) {
+                    $imagePath = $image->store('product-images', 'public');
+
+                    $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
+                    $sized_image->save();
+                    $imageUrl = 'http://103.163.118.100/bkrm-api/storage/app/public/'
+                    . $imagePath;
+
+                    DB::table('images')->insert([
+                        'uuid' => (string) Str::uuid(),
+                        'url' => $imageUrl,
+                        'store_id' => $store->id,
+                        'entity_uuid' => $product->uuid,
+                        'image_type' => 'product'
+                    ]);
+
+                    array_push($imageUrls, $imageUrl);
+                }
+            }
+        }
+
+
+        /// if no product images set to the default
+        if (DB::table('images')->where('entity_uuid', $product->uuid)->doesntExist()) {
+            array_push($imageUrls, 'http://103.163.118.100/bkrm-api/storage/app/public/'
+            . 'storage/product-images/product-default.png');
+
+            DB::table('images')->insert([
+                'uuid' => (string) Str::uuid(),
+                'url' => 'http://103.163.118.100/bkrm-api/storage/app/public/'
+                . 'storage/product-images/product-default.png',
+                'store_id' => $store->id,
+                'entity_uuid' => $product->uuid,
+                'image_type' => 'product'
+            ]);
+        }
 
         if (isset($data['category_uuid'])) {
             $id = Category::where('uuid', $data['category_uuid'])->first()->id;
@@ -370,5 +435,51 @@ class ProductController extends Controller
             'message' => $isDeleted,
             'data' => $product_supplier
         ], 200);
+    }
+
+
+    public function searchDefaultProduct(Request $request) {
+        $name = $request->query('name');
+        $barcode = $request->query('barcode');
+        $limit = $request->query('limit');
+        $page = $request->query('page');
+
+        $data = [];
+
+        $mergeImgPath = 'http://103.163.118.100/bkrm-api/storage/app/public/';
+
+        
+        if ($barcode) {
+            $productInfos = Barcode::where('product_name', 'LIKE', '%' . $barcode . '%')
+                ->offset($limit * ($page - 1))
+                ->limit($limit)
+                ->get()->toArray();
+        }
+        else if ($name) {
+            $productInfos = Barcode::where('product_name', 'LIKE' , '%' . $name . '%')
+                ->offset($limit*($page - 1))
+                ->limit($limit)
+                ->get()->toArray();
+        }
+
+        if ($name === "" && $barcode === "") {
+            $productInfos = Barcode::offset($limit * ($page - 1))->limit($limit)
+                ->get()->toArray();
+        }
+
+        foreach ($productInfos as $productInfo) {
+            $mergeImgPath = 'http://103.163.118.100/bkrm-api/storage/app/public/';
+
+            $img_url =  $mergeImgPath . $productInfo['image_url'];
+            array_push($data, [
+                'name' => $productInfo['product_name'],
+                'img_url' => $img_url,
+                'bar_code' => $productInfo['bar_code']
+            ]);
+        }
+
+        return response()->json([
+            'data' => $data,
+        ], 200); 
     }
 }

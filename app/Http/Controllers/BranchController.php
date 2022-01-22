@@ -14,7 +14,7 @@ class BranchController extends Controller
     public function index(Store $store)
     {
         return response()->json([
-            'data' => $store->branches, 
+            'data' => $store->branches()->where('status', '<>', 'deleted')->get(), 
         ]);
     }
 
@@ -24,10 +24,12 @@ class BranchController extends Controller
             'name' => 'required|unique:stores',
             'address' => 'nullable|string',
             'ward' => 'nullable|string',
-            'city' => 'nullable|string',
+            'district' => 'nullable|string',
             'province' => 'nullable|string',
             'phone' => 'nullable|string',
             'status' => 'nullable|in:active,inactive',
+            'lat' => 'nullable|string',
+            'lng' => 'nullable|string',
         ]);
 
         $branch = Branch::create(array_merge($data, [
@@ -55,10 +57,12 @@ class BranchController extends Controller
             'name' => 'nullable|unique:stores',
             'address' => 'nullable|string',
             'ward' => 'nullable|string',
-            'city' => 'nullable|string',
+            'district' => 'nullable|string',
             'province' => 'nullable|string',
             'phone' => 'nullable|string',
             'status' => 'nullable|in:active,inactive',
+            'lng' => 'nullable|string',
+            'lat' => 'nullable|string',
         ]);
 
         $branch->update($data);
@@ -71,8 +75,17 @@ class BranchController extends Controller
 
     public function destroy(Store $store, Branch $branch)
     {
+        $numOfBranch = $store->branches()->where('status', 'active')->count();  
+        if ($numOfBranch <= 1) {
+            return response()->json([
+            'message' => 'Can not delete last branch',
+            'data' => $branch
+        ], 404);
+        }
+
+        $branch->update(['status' => 'deleted']);
         return response()->json([
-            'message' => 'Branch deleted successfully',
+            'message' => 1,
             'data' => $branch,
         ], 200);
     }

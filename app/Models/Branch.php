@@ -45,4 +45,8 @@ class Branch extends Model
     {
         return $this->hasMany(BranchInventory::class);
     }
+
+    public function inventoryChecks() {
+        return $this->hasMany(InventoryCheck::class);
+    }
 }

@@ -28,6 +28,7 @@ class Employee extends Authenticatable implements JWTSubject
         'gender',
         'uuid',
         'salary_type',
+        'img_url',
         'salary',
         'id_card_num',
         'address',

@@ -116,7 +116,8 @@ class AuthController extends Controller
             }
     
             return $this->createNewEmpToken($token);
-        } else {
+        } 
+        if($request['role'] === 'owner') {
 
             if ($validator->fails()) {
                 return response()->json($validator->errors(), 422);
@@ -207,6 +208,7 @@ class AuthController extends Controller
                 'user' => Auth::guard('employee')->user(),
                 'store' => $store,
                 'role'=> 'employee',
+                'permission' => $user->priviledges,
             ]);
         } else {
             return response()->json([

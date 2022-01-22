@@ -8,13 +8,35 @@ use App\Models\Employee;
 use Spatie\Permission\Models\Permission;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
+use Intervention\Image\Facades\Image;
 
 class EmployeeController extends Controller
 {
     public function index(Store $store)
     {
+        
         return response()->json([
-            'data' => $store->employees
+            'data' => $store->employees()->where('status', '<>', 'deleted')->get()
+        ], 200);
+    }
+
+    public function editEmployeeImage(Request $request, Store $store, Employee $employee) {
+        $fields = $request->validate([
+            'image' => 'required',
+            'oldImageUrl' => 'required',
+        ]);
+
+        $imagePath = $fields['image']->store('employee-images', 'public');
+        $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
+        $sized_image->save();
+
+
+        /// to do delete old image
+
+        $employee->update(['img_url' => $imagePath]);
+
+        return response()->json([
+            'data' => $employee,
         ], 200);
     }
 
@@ -32,8 +54,20 @@ class EmployeeController extends Controller
             'salary' => 'nullable|string',
             'salary_type' => 'nullable|string',
             'address' => 'nullable|string',
-            'permissions' => 'required|array'
+            'permissions' => 'required|array',
+            'image' => 'nullable'
         ]);
+
+        $imagePath = "";
+        if (array_key_exists('image', $fields)) {
+            if ($fields['image'] != null) {
+                $imagePath = $fields['image']->store('employee-images', 'public');
+                $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
+                $sized_image->save();
+            }
+        } else {
+            $imagePath = 'http://103.163.118.100/bkrm-api/storage/app/public/storage/employee-images/employee-default.png';
+        }
 
         $employee = [
             'name' => $fields['name'],
@@ -49,6 +83,7 @@ class EmployeeController extends Controller
             'salary_type' => $fields['salary_type'],
             'address' => $fields['address'],
             'store_id' => $store->id,
+            'img_url' => $imagePath,
         ];
 
         $newEmployee = Employee::create($employee);
@@ -76,6 +111,7 @@ class EmployeeController extends Controller
             'date_of_birth' => 'nullable|date_format:Y-m-d',
             'status' =>'nullable|in:active,inactive',
             'gender' => 'nullable|in:male,female',
+            'status' => 'nullable|string',
         ]);
 
         $employee->update($fields);
@@ -88,9 +124,9 @@ class EmployeeController extends Controller
 
     public function destroy(Store $store, Employee $employee)
     {
-        $isDeleted = Employee::destroy($employee->id);
+        $employee->update(['status', 'deleted']);
         return response()->json([
-            'message' => $isDeleted,
+            'message' => 1,
             'data' => $employee,
         ], 200);
     }

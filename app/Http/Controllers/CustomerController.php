@@ -12,7 +12,7 @@ class CustomerController extends Controller
     public function index(Store $store)
     {
         return response()->json([
-            'data' => $store->customers,
+            'data' => $store->customers()->where('status', '<>', 'deleted')->get(),
         ], 200);
     }
 
@@ -58,6 +58,7 @@ class CustomerController extends Controller
             'city' => 'nullable|string',
             'province' => 'nullable|string',
             'payment_info' => 'nullable|string',
+            'status' => 'nullable|string',
         ]);
 
         $customer->update($validated);
@@ -69,9 +70,17 @@ class CustomerController extends Controller
 
     public function destroy(Store $store, Customer $customer)
     {
-        $isdeleted = Customer::destroy($customer->id);
+        $numOfCust = $store->customers()->where('status', 'active')->count();  
+        if ($numOfCust <= 1) {
+            return response()->json([
+            'message' => 'Can not delete last customer',
+            'data' => $customer
+        ], 404);
+        }
+
+        $customer->update(['status' => 'deleted']);
         return response()->json([
-            'message' => $isdeleted,
+            'message' => 1,
             'data' => $customer
         ], 200);
     }
