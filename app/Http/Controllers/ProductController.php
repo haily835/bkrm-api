@@ -439,33 +439,36 @@ class ProductController extends Controller
 
 
     public function searchDefaultProduct(Request $request) {
-        $name = $request->query('name');
-        $barcode = $request->query('barcode');
+        // $name = $request->query('name');
+        // $barcode = $request->query('barcode');
+        $searchKey = $request->query('searchKey');
         $limit = $request->query('limit');
         $page = $request->query('page');
 
         $data = [];
-
+        $productInfos = [];
         $mergeImgPath = 'http://103.163.118.100/bkrm-api/storage/app/public/';
 
         
-        if ($barcode) {
-            $productInfos = Barcode::where('product_name', 'LIKE', '%' . $barcode . '%')
+        if ($searchKey) {
+            $productInfos = Barcode::
+                where('bar_code', 'LIKE', '%' . $searchKey . '%')
+                ->orWhere('product_name', 'LIKE', '%' . $searchKey . '%')
                 ->offset($limit * ($page - 1))
                 ->limit($limit)
                 ->get()->toArray();
         }
-        else if ($name) {
-            $productInfos = Barcode::where('product_name', 'LIKE' , '%' . $name . '%')
-                ->offset($limit*($page - 1))
+        else {
+            $productInfos = Barcode
+                ::offset($limit*($page - 1))
                 ->limit($limit)
                 ->get()->toArray();
         }
 
-        if ($name === "" && $barcode === "") {
-            $productInfos = Barcode::offset($limit * ($page - 1))->limit($limit)
-                ->get()->toArray();
-        }
+        // if ($name === "" && $barcode === "") {
+        //     $productInfos = Barcode::offset($limit * ($page - 1))->limit($limit)
+        //         ->get()->toArray();
+        // }
 
         foreach ($productInfos as $productInfo) {
             $mergeImgPath = 'http://103.163.118.100/bkrm-api/storage/app/public/';

@@ -23,6 +23,7 @@ use App\Http\Controllers\BarcodeController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\AddressController;
+use App\Http\Controllers\InventoryCheckController;
 use App\Http\Controllers\StoreReportController;
 use Intervention\Image\Facades\Image;
 
@@ -65,7 +66,6 @@ Route::group(['middleware' => ['auth:user,employee']], function () {
     Route::get('/stores/{store:uuid}/report/item', [StoreReportController::class, 'getReportItems']); 
     Route::get('/stores/{store:uuid}/report/category', [StoreReportController::class, 'getReportCategories']); 
     
-
     Route::get('/stores/{store:uuid}/employees', [EmployeeController::class, 'index']);
     Route::post('/stores/{store:uuid}/employees', [EmployeeController::class, 'store']);
     Route::get('/stores/{store:uuid}/employees/{employee:uuid}', [EmployeeController::class, 'show']);
@@ -139,9 +139,9 @@ Route::group(['middleware' => ['auth:user,employee']], function () {
     // Route::get('/stores/{store:uuid}/branches/{branch:uuid}/purchase-returns/{purchaseReturn:uuid}', [PurchaseReturnController::class, 'show']);
 
 
-    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/inventory-checks/{inventoryCheck:uuid}', [PurchaseReturnController::class, 'show']);
-    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/inventory-checks', [PurchaseReturnController::class, 'index']);
-    Route::post('/stores/{store:uuid}/branches/{branch:uuid}/inventory-checks', [PurchaseReturnController::class, 'store']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/inventory-checks/{inventoryCheck:uuid}', [InventoryCheckController::class, 'show']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/inventory-checks', [InventoryCheckController::class, 'index']);
+    Route::post('/stores/{store:uuid}/branches/{branch:uuid}/inventory-checks', [InventoryCheckController::class, 'store']);
 
     Route::get('/stores/{store:uuid}/suppliers', [SupplierController::class, 'index']);
     Route::post('/stores/{store:uuid}/suppliers', [SupplierController::class, 'store']);

@@ -29,4 +29,8 @@ class Refund extends Model
     public function order() {
         return $this->belongsTo(Order::class);
     }
+
+    protected $casts = [
+        'created_at' => 'datetime:Y-m-d H:i:s',
+    ];
 }

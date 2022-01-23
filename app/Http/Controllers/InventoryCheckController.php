@@ -41,20 +41,46 @@ class InventoryCheckController extends Controller
             array_push($queries, ['inventory_checks.created_at', '<=', $end_date . ' 12:59:59']);
         }
 
+        $data = [];
+
         $inventoryChecks = $branch->inventoryChecks()
             ->where($queries)
             ->join('branches', 'inventory_checks.branch_id', '=', 'branches.id')
-            ->select('inventory_checks.*', 'branches.name as branch_name')->get();
+            ->select('inventory_checks.*', 'branches.name as branch_name')->get()->toArray();
+
+        foreach($inventoryChecks as $inventoryCheck) {
+            if ($inventoryCheck['created_user_type'] === 'owner') {
+                $user = User::where('id', $inventoryCheck['created_by'])->first();
+                $inventoryCheck = array_merge($inventoryCheck, [
+                    'user_name' => $user->name,
+                    'user_phone' => $user->phone,
+                ]);
+            } else {
+                $user = Employee::where('id', $inventoryCheck['created_by'])->first();
+                $inventoryCheck = array_merge($inventoryCheck, [
+                    'user_name' => $user->name,
+                    'user_phone' => $user->phone,
+                ]);
+            }
+
+            $details = InventoryCheckDetail::where('inventory_check_id', $inventoryCheck['id'])
+                ->join('products', 'products.id', '=', 'inventory_check_details.product_id')
+                ->select('inventory_check_details.*', 'products.name as product_name', 'products.bar_code as product_bar_code')
+                ->get();
+            
+            $inventoryCheck = array_merge($inventoryCheck, ['details' => $details]);
+            array_push($data, $inventoryCheck);
+        }
 
         return response()->json([
-            'data' => $inventoryChecks,
+            'data' => $data,
         ], 200);
     }
 
     public function store(Request $request, Store $store, Branch $branch)
     {
         $validated = $request->validate([
-            'total_amount' => 'required|number',
+            'total_amount' => 'required|numeric',
             'details' => 'required',
             'note' => 'nullable',
         ]);
@@ -75,7 +101,7 @@ class InventoryCheckController extends Controller
             ], 401);
         }
 
-        $last_id = $store->invetoryChecks()->count();
+        $last_id = $store->inventoryChecks()->count();
 
         $invetoryCheckCode = 'KK' . sprintf('%06d', $last_id + 1);
 
@@ -88,7 +114,6 @@ class InventoryCheckController extends Controller
             'created_by' => $created_by,
             'total_amount' => $validated['total_amount'],
             'created_user_type' => $created_user_type,
-            'status' => $validated['status'],
         ]);
 
         foreach ($validated['details'] as $detail) {
@@ -103,12 +128,13 @@ class InventoryCheckController extends Controller
                 'transaction_type' => 'balance',
             ]);
 
-            InventoryCheck::create([
+            InventoryCheckDetail::create([
                 'store_id' => $store->id,
                 'branch_id' => $branch->id,
                 'product_id' => $product_id,
                 'inventory_transaction_id' => $inventoryTransaction->id,
-                'purchase_order_id' => $invetoryCheck->id,
+                'branch_inventory' => $detail['branch_inventory'],
+                'inventory_check_id' => $invetoryCheck->id,
                 'unit_price' => $detail['unit_price'],
                 'quantity' => $detail['quantity'],
             ]);

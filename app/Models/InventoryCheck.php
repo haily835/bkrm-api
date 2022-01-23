@@ -12,7 +12,6 @@ class InventoryCheck extends Model
     protected $guarded = [];
 
     protected $hidden = [
-        'id',
     ];
 
     public function inventoryCheckDetails()
@@ -22,7 +21,7 @@ class InventoryCheck extends Model
 
     protected $casts = [
         'approved_date' => 'datetime:Y-m-d H:i:s',
-        
+        'created_at' => 'datetime:Y-m-d H:i:s',
     ];
 
 }
