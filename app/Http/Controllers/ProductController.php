@@ -14,6 +14,8 @@ use Intervention\Image\Facades\Image;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use App\Models\Barcode;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Illuminate\Support\Facades\Validator;
 
 class ProductController extends Controller
 {
@@ -23,7 +25,7 @@ class ProductController extends Controller
 
         $products = [];
 
-        if($search_key) {
+        if ($search_key) {
             $products = $store->products()
                 ->where('store_id', $store->id)
                 ->where('name', 'LIKE', '%' . $search_key . '%')
@@ -34,12 +36,13 @@ class ProductController extends Controller
         } else {
             $products = $store->products()
                 ->where('status', '<>', 'deleted')
+                ->orderBy('created_at', 'DESC')
                 ->get()->toArray();
         }
 
         $data = [];
 
-        foreach($products as $product) {
+        foreach ($products as $product) {
             $firstImageUrl = DB::table('images')->where('entity_uuid', $product['uuid'])->get('url')->first();
             $category = $store->categories->where('id', $product['category_id'])->first();
             unset($product['category_id']);
@@ -47,7 +50,7 @@ class ProductController extends Controller
             // get branch inventory of that product
             $branch_product = $branch->inventory()->where('product_id', $product['id'])->first();
 
-            if($branch_product) {
+            if ($branch_product) {
                 $branch_quantity = $branch_product->quantity_available;
             } else {
                 BranchInventory::create([
@@ -77,12 +80,12 @@ class ProductController extends Controller
 
         $products = [];
 
-        if($search_key) {
+        if ($search_key) {
             $products = $store->products()->where('name', 'LIKE', '%' . $search_key . '%')
-                                        ->orWhere('bar_code', 'LIKE','%' . $search_key . '%')
-                                        ->where('status', '<>', 'inactive')
-                                        ->where('status', '<>', 'deleted')
-                                        ->get()->toArray();
+                ->orWhere('bar_code', 'LIKE', '%' . $search_key . '%')
+                ->where('status', '<>', 'inactive')
+                ->where('status', '<>', 'deleted')
+                ->get()->toArray();
         } else {
             $products = $store->products()
                 ->where('status', '<>', 'deleted')
@@ -91,7 +94,7 @@ class ProductController extends Controller
 
         $data = [];
 
-        foreach($products as $product) {
+        foreach ($products as $product) {
             $firstImageUrl = DB::table('images')->where('entity_uuid', $product['uuid'])->get('url')->first();
             $category = $store->categories->where('id', $product['category_id'])->first();
             unset($product['category_id']);
@@ -112,10 +115,10 @@ class ProductController extends Controller
 
         $products = [];
 
-        if($search_key) {
+        if ($search_key) {
             $products = $store->products()
                 ->where('name', 'LIKE', '%' . $search_key . '%')
-                // ->orWhere('bar_code', 'LIKE','%' . $search_key . '%')
+                ->orWhere('bar_code', 'LIKE', '%' . $search_key . '%')
                 ->get()
                 ->toArray();
         } else {
@@ -124,7 +127,7 @@ class ProductController extends Controller
 
         $data = [];
 
-        foreach($products as $product) {
+        foreach ($products as $product) {
             $firstImageUrl = DB::table('images')->where('entity_uuid', $product['uuid'])->get('url')->first();
             $category = $store->categories->where('id', $product['category_id'])->first();
             unset($product['category_id']);
@@ -132,7 +135,7 @@ class ProductController extends Controller
             // get branch inventory of that product
             $branch_product = $branch->inventory()->where('product_id', $product['id'])->first();
 
-            if($branch_product) {
+            if ($branch_product) {
                 $branch_quantity = $branch_product->quantity_available;
             } else {
                 BranchInventory::create([
@@ -170,7 +173,7 @@ class ProductController extends Controller
             'description' => 'string|nullable',
             'img_url' => 'nullable|string'
         ]);
-        
+
         $product_uuid = (string) Str::uuid();
 
         $imageUrls = array();
@@ -187,17 +190,17 @@ class ProductController extends Controller
             }
             array_push($imageUrls, $data['img_url']);
         }
-        
+
         if (array_key_exists('images', $data)) {
             if ($data['images'] != null) {
                 foreach ($data['images'] as $image) {
                     $imagePath = $image->store('product-images', 'public');
-    
+
                     $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
                     $sized_image->save();
                     $imageUrl = 'http://103.163.118.100/bkrm-api/storage/app/public/'
                         . $imagePath;
-    
+
                     DB::table('images')->insert([
                         'uuid' => (string) Str::uuid(),
                         'url' => $imageUrl,
@@ -205,39 +208,37 @@ class ProductController extends Controller
                         'entity_uuid' => $product_uuid,
                         'image_type' => 'product'
                     ]);
-    
+
                     array_push($imageUrls, $imageUrl);
                 }
             }
         } else {
             DB::table('images')->insert([
                 'uuid' => (string) Str::uuid(),
-                'url' => 'http://103.163.118.100/bkrm-api/storage/app/public/'
-                    . 'storage/product-images/product-default.png',
+                'url' => 'http://103.163.118.100/bkrm-api/storage/app/public/product-images/product-default.png',
                 'store_id' => $store->id,
                 'entity_uuid' => $product_uuid,
                 'image_type' => 'product'
             ]);
 
-            array_push($imageUrls, 'http://103.163.118.100/bkrm-api/storage/app/public/'
-                . 'storage/product-images/product-default.png');
+            array_push($imageUrls, 'http://103.163.118.100/bkrm-api/storage/app/public/product-images/product-default.png');
         }
 
         $category = Category::where('uuid', $data['category_uuid'])->first();
 
-        
+
         $barcode = "";
         // create barcode if user not specify
         if (array_key_exists('bar_code', $data)) {
-            if($data['bar_code']) {
+            if ($data['bar_code']) {
                 $barcode = $data['bar_code'];
             } else {
                 $last_id = count($store->products);
-                $barcode = 'SP' . sprintf( '%04d', $last_id );
+                $barcode = 'SP' . sprintf('%04d', $last_id);
             }
         } else {
             $last_id = count($store->products);
-            $barcode = 'SP' . sprintf( '%04d', $last_id );
+            $barcode = 'SP' . sprintf('%04d', $last_id);
         }
 
         $newProduct =  Product::create([
@@ -255,9 +256,9 @@ class ProductController extends Controller
             'has_variance' => false,
             'on_sale' => false,
         ]);
-        
+
         // add new product to each branch inventory
-        foreach($store->branches as $branch) {
+        foreach ($store->branches as $branch) {
             BranchInventory::create([
                 'store_id' => $store->id,
                 'branch_id' => $branch->id,
@@ -290,7 +291,8 @@ class ProductController extends Controller
         ], 200);
     }
 
-    public function editProduct(Request $request, Store $store, Product $product) {
+    public function editProduct(Request $request, Store $store, Product $product)
+    {
         return $request->all();
     }
 
@@ -310,7 +312,7 @@ class ProductController extends Controller
         ]);
 
         if (isset($data['deleted_urls'])) {
-            if($data['deleted_urls']) {
+            if ($data['deleted_urls']) {
                 DB::table('images')->where('entity_uuid', $product['uuid'])
                     ->whereIn('url', $data['deleted_urls'])->delete();
             }
@@ -324,7 +326,7 @@ class ProductController extends Controller
                     $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
                     $sized_image->save();
                     $imageUrl = 'http://103.163.118.100/bkrm-api/storage/app/public/'
-                    . $imagePath;
+                        . $imagePath;
 
                     DB::table('images')->insert([
                         'uuid' => (string) Str::uuid(),
@@ -343,12 +345,12 @@ class ProductController extends Controller
         /// if no product images set to the default
         if (DB::table('images')->where('entity_uuid', $product->uuid)->doesntExist()) {
             array_push($imageUrls, 'http://103.163.118.100/bkrm-api/storage/app/public/'
-            . 'storage/product-images/product-default.png');
+                . 'storage/product-images/product-default.png');
 
             DB::table('images')->insert([
                 'uuid' => (string) Str::uuid(),
                 'url' => 'http://103.163.118.100/bkrm-api/storage/app/public/'
-                . 'storage/product-images/product-default.png',
+                    . 'storage/product-images/product-default.png',
                 'store_id' => $store->id,
                 'entity_uuid' => $product->uuid,
                 'image_type' => 'product'
@@ -438,7 +440,8 @@ class ProductController extends Controller
     }
 
 
-    public function searchDefaultProduct(Request $request) {
+    public function searchDefaultProduct(Request $request)
+    {
         // $name = $request->query('name');
         // $barcode = $request->query('barcode');
         $searchKey = $request->query('searchKey');
@@ -449,18 +452,16 @@ class ProductController extends Controller
         $productInfos = [];
         $mergeImgPath = 'http://103.163.118.100/bkrm-api/storage/app/public/';
 
-        
+
         if ($searchKey) {
-            $productInfos = Barcode::
-                where('bar_code', 'LIKE', '%' . $searchKey . '%')
+            $productInfos = Barcode::where('bar_code', 'LIKE', '%' . $searchKey . '%')
                 ->orWhere('product_name', 'LIKE', '%' . $searchKey . '%')
                 ->offset($limit * ($page - 1))
                 ->limit($limit)
                 ->get()->toArray();
-        }
-        else {
+        } else {
             $productInfos = Barcode
-                ::offset($limit*($page - 1))
+                ::offset($limit * ($page - 1))
                 ->limit($limit)
                 ->get()->toArray();
         }
@@ -483,6 +484,155 @@ class ProductController extends Controller
 
         return response()->json([
             'data' => $data,
-        ], 200); 
+        ], 200);
+    }
+
+    public function addProductByJson(Request $request, Store $store)
+    {
+        // trung bar_code => error
+        // trung product_code => error
+        // same product_code, same bar_code => update other field 
+
+        $products = $request->input('json_data');
+        $productTobeUpdated = [];
+        $productTobeAdded = [];
+
+        $errorMessage = [];
+        $isExistError = false;
+
+        $category = $store->categories()->first();
+
+        foreach ($products as $key => $product) {
+            $typeValidator = Validator::make($product, [
+                'name' => 'required|string|max:255',
+                'bar_code' => 'nullable|string',
+                'product_code' => 'nullable|string',
+                'min_reorder_quantity' => 'nullable|numeric',
+                'max_quantity' => 'nullable|numeric',
+                'urls' => 'nullable|array',
+                'list_price' => 'nullable|numeric',
+                'standard_price' => 'nullable|numeric',
+                'description' => 'nullable|string',
+                'quantity_per_unit' => 'nullable|string'
+            ], [
+                'unique' => ':attribute đã được sử dụng',
+                'required' => ':attribute bị thiếu',
+                'string' => 'Kiểu chuỗi',
+                'numeric' => 'Kiểu số',
+                'array' => 'Kiểu chuỗi phân cách bởi dấu ,'
+            ]);
+
+            $oldProduct = $store->products()
+                ->where('product_code', $product['product_code'])
+                ->where('bar_code', $product['bar_code'])->count();
+
+            $barcodeUsed = $store->products()->where('bar_code', $product['bar_code'])->count();
+            $productCodeUsed
+                = $store->products()->where('product_code', $product['product_code'])->count();
+
+            if ($typeValidator->fails()) {
+                array_push($errorMessage, [
+                    'row' => $key + 1,
+                    'error' => $typeValidator->errors()->toArray(),
+                    'product' => $product
+                ]);
+                $isExistError = true;
+                continue;
+            }
+
+            if ($oldProduct) {
+                array_push($productTobeUpdated, $product);
+            } elseif ($barcodeUsed || $productCodeUsed) {
+                array_push($errorMessage, [
+                    'row' => $key + 1,
+                    'error' => ["code" => "Mã vạch hoặc mã sp đã được sử dụng"],
+                    'product' => $product
+                ]);
+                $isExistError = true;
+            } else {
+                array_push($productTobeAdded, $product);
+            }
+        }
+
+        // return response()->json([
+        //     'update' => $productTobeUpdated,
+        //     'add' => $productTobeAdded,
+        //     'old' => $oldProduct,
+        //     'dup bar' => $barcodeUsed,
+        //     'dup group' => $productCodeUsed,
+        //     'err' => $errorMessage,
+        // ], 200);
+
+        if (!$isExistError) {
+            foreach ($productTobeAdded as $product) {
+                $product_code = $product['product_code'];
+                $product_uuid = (string) Str::uuid();
+
+                if (!$product_code) {
+                    $last_id = count($store->products);
+                    $product_code = 'SP' . sprintf('%04d', $last_id);
+                }
+
+                Product::create([
+                    'name' => $product['name'],
+                    'bar_code' => $product['bar_code'],
+                    'product_code' => $product_code,
+                    'min_reorder_quantity' => $product['min_reorder_quantity'],
+                    'max_quantity' => $product['max_quantity'],
+                    'list_price' => $product['list_price'],
+                    'standard_price' => $product['standard_price'],
+                    'uuid' => $product_uuid,
+                    'category_id' => $category->id,
+                    'quantity_per_unit' => $product['quantity_per_unit'],
+                    'store_id' => $store->id,
+                ]);
+
+                foreach ($product['urls'] as $url) {
+                    DB::table('images')->insert([
+                        'uuid' => (string) Str::uuid(),
+                        'url' => $url,
+                        'store_id' => $store->id,
+                        'entity_uuid' => $product_uuid,
+                        'image_type' => 'product'
+                    ]);
+                }
+            }
+
+            foreach ($productTobeUpdated as $product) {
+                $oldProduct = $store->products()
+                    ->where('product_code', $product['product_code'])
+                    ->where('bar_code', $product['bar_code'])->first();
+
+                $oldProduct->update([
+                    'name' => $product['name'],
+                    'min_reorder_quantity' => $product['min_reorder_quantity'],
+                    'max_quantity' => $product['max_quantity'],
+                    'list_price' => $product['list_price'],
+                    'standard_price' => $product['standard_price'],
+                    'category_id' => $category->id,
+                    'quantity_per_unit' => $product['quantity_per_unit'],
+                ]);
+
+                // delete old images
+                DB::table('images')->where('entity_uuid', $oldProduct['uuid'],)->delete();
+                foreach ($product['urls'] as $url) {
+                    DB::table('images')->insert([
+                        'uuid' => (string) Str::uuid(),
+                        'url' => $url,
+                        'store_id' => $store->id,
+                        'entity_uuid' =>  $oldProduct['uuid'],
+                        'image_type' => 'product'
+                    ]);
+                }
+            }
+            return response()->json([
+                'message' => 'products added successfully'
+            ], 200);
+        } else {
+            return response()->json([
+                'status' => 'error',
+                'data' => $errorMessage
+            ], 200);
+        }
     }
 }

@@ -22,7 +22,7 @@ class PurchaseOrderController extends Controller
         $start_date = $request->query('startDate');
         $end_date = $request->query('endDate');
         $min_total_amount = $request->query('minTotalAmount');
-        $max_total_amount = $request->query ('maxTotalAmount');
+        $max_total_amount = $request->query('maxTotalAmount');
         $min_discount = $request->query('minDiscount');
         $max_discount = $request->query('maxDiscount');
         $status = $request->query('status');
@@ -32,39 +32,39 @@ class PurchaseOrderController extends Controller
         // set up query
         $queries = [];
 
-        if($purchase_order_code) {
+        if ($purchase_order_code) {
             array_push($queries, ['purchase_orders.purchase_order_code', 'LIKE', $purchase_order_code]);
         }
 
-        if($start_date) {
+        if ($start_date) {
             array_push($queries, ['purchase_orders.creation_date', '>=', $start_date]);
         }
 
-        if($end_date) {
+        if ($end_date) {
             array_push($queries, ['purchase_orders.creation_date', '<=', $end_date]);
         }
 
-        if($min_total_amount) {
+        if ($min_total_amount) {
             array_push($queries, ['purchase_orders.total_amount', '>=', $min_total_amount]);
         }
 
-        if($max_total_amount) {
+        if ($max_total_amount) {
             array_push($queries, ['purchase_orders.total_amount', '<=', $max_total_amount]);
         }
 
-        if($min_discount) {
+        if ($min_discount) {
             array_push($queries, ['purchase_orders.discount', '>=', $min_total_amount]);
         }
 
-        if($max_discount) {
+        if ($max_discount) {
             array_push($queries, ['purchase_orders.discount', '<=', $max_discount]);
         }
 
-        if($status) {
+        if ($status) {
             array_push($queries, ['purchase_orders.status', '==', $status]);
         }
 
-        if($payment_method) {
+        if ($payment_method) {
             array_push($queries, ['purchase_orders.payment_method', '<=', $payment_method]);
         }
 
@@ -79,12 +79,13 @@ class PurchaseOrderController extends Controller
         ], 200);
     }
 
-    public function getStorePurchaseOrder(Store $store) {
+    public function getStorePurchaseOrder(Store $store)
+    {
         $data = $store->purchaseOrders()
             ->join('suppliers', 'purchase_orders.supplier_id', '=', 'suppliers.id')
             ->join('branches', 'purchase_orders.branch_id', '=', 'branches.id')
             ->select('purchase_orders.*', 'suppliers.name as supplier_name', 'branches.name as branch_name')->get();
-                                    
+
         return response()->json([
             'data' => $data,
         ]);
@@ -110,7 +111,7 @@ class PurchaseOrderController extends Controller
         if (Auth::guard('user')->user()) {
             $created_by = $approved_by = Auth::guard('user')->user()->id;
             $created_user_type = 'owner';
-        } else if (Auth::guard('employee')->user()){
+        } else if (Auth::guard('employee')->user()) {
             $created_by = $approved_by = Auth::guard('employee')->user()->id;
             $created_user_type = 'employee';
         } else {
@@ -121,11 +122,11 @@ class PurchaseOrderController extends Controller
 
         $creation_date = $approved_date = $validated['import_date'];
 
-        $supplier_id = $store->suppliers()->where('uuid',$validated['supplier_uuid'])->first()->id;
+        $supplier_id = $store->suppliers()->where('uuid', $validated['supplier_uuid'])->first()->id;
 
         $last_id = $store->purchaseOrders()->count();
 
-        $purchaseOrderCode = 'PO' . sprintf( '%06d', $last_id );
+        $purchaseOrderCode = 'PO' . sprintf('%06d', $last_id);
 
         $purchaseOrder = PurchaseOrder::create([
             'store_id' => $store->id,
@@ -149,7 +150,7 @@ class PurchaseOrderController extends Controller
 
         foreach ($validated['details'] as $detail) {
             $product_id = $store->products->where('uuid', '=', $detail['uuid'])->first()->id;
-            
+
             $inventoryTransaction = InventoryTransaction::create([
                 'uuid' => (string)Str::uuid(),
                 'store_id' => $store->id,
@@ -175,7 +176,7 @@ class PurchaseOrderController extends Controller
             $product = $store->products->where('uuid', '=', $detail['uuid'])->first();
             $newQuantity = (string)((int) $product->quantity_available) + ((int) $detail['quantity']);
             $product->update(['quantity_available' => $newQuantity]);
-            
+
             // update branch inventory table
             $productOfStore = BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])->first();
 
@@ -232,7 +233,7 @@ class PurchaseOrderController extends Controller
             'approved_by' => 'nullable|numeric',
             'approved_date' => 'nullable|date_format:Y-m-d',
             'payment_date' => 'nullable|date_format:Y-m-d',
-            'payment_amount' => 'nullable|numeric',
+            'paid_amount' => 'nullable|numeric',
             'payment_method' => 'nullable|string',
             'notes' => 'nullable|string',
             'status' => 'nullable|string',
@@ -269,7 +270,7 @@ class PurchaseOrderController extends Controller
             'data' => $data
         ], 200);
     }
-    
+
     public function destroy(Store $store, Branch $branch, PurchaseOrder $purchaseOrder)
     {
         $isdelected = PurchaseOrder::destroy($purchaseOrder->id);

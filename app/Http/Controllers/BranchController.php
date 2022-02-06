@@ -7,14 +7,44 @@ use App\Models\Store;
 use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use App\Models\User;
+use App\Models\Employee;
 
 class BranchController extends Controller
 {
 
     public function index(Store $store)
     {
+        if (Auth::guard('user')->user()) {
+            return response()->json([
+                'data' => $store->branches()->where('status', '<>', 'deleted')->get(),
+            ]);
+        } else if (Auth::guard('employee')->user()) {
+            $employee_id = Auth::guard('employee')->user()->id;
+            $branches = DB::table('employee_work_branch')
+                ->leftJoin('branches', 'branches.id', '=', 'employee_work_branch.branch_id')
+                ->where('employee_work_branch.employee_id', $employee_id)
+                ->where('branches.status','active')
+                ->select('branches.*')
+                ->get();
+
+            return response()->json([
+                'data' => $branches,
+                'emp' => $employee_id,
+            ]);
+        } else {
+            return response()->json([
+                'message' => 'Unauthorized',
+            ], 401);
+        }
+    }
+
+    public function getAllBranches(Store $store)
+    {
         return response()->json([
-            'data' => $store->branches()->where('status', '<>', 'deleted')->get(), 
+            'data' => $store->branches()->where('status', '<>', 'deleted')->get(),
         ]);
     }
 
@@ -48,7 +78,6 @@ class BranchController extends Controller
         return response()->json([
             'data' => $branch,
         ], 200);
-        
     }
 
     public function update(Request $request, Store $store, Branch $branch)
@@ -75,12 +104,12 @@ class BranchController extends Controller
 
     public function destroy(Store $store, Branch $branch)
     {
-        $numOfBranch = $store->branches()->where('status', 'active')->count();  
+        $numOfBranch = $store->branches()->where('status', 'active')->count();
         if ($numOfBranch <= 1) {
             return response()->json([
-            'message' => 'Can not delete last branch',
-            'data' => $branch
-        ], 404);
+                'message' => 'Can not delete last branch',
+                'data' => $branch
+            ], 404);
         }
 
         $branch->update(['status' => 'deleted']);

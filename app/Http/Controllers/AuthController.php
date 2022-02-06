@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
+
 use Illuminate\Http\Request;
 
 use Illuminate\Support\Facades\Auth;
@@ -16,14 +17,15 @@ use Illuminate\Support\Str;
 
 class AuthController extends Controller
 {
-    public function ownerRegister(Request $request) {
+    public function ownerRegister(Request $request)
+    {
         $fields = $request->validate([
             'name' => 'required|string',
             'email' => 'required|string|unique:users,email',
             'password' => 'required|string|confirmed',
             'phone' => 'required|unique:users',
             'date_of_birth' => 'nullable|date_format:Y-m-d',
-            'status' =>'nullable|in:active,inactive',
+            'status' => 'nullable|in:active,inactive',
             'gender' => 'nullable|string',
             'store_name' => 'required|string',
             'address' => 'required|string',
@@ -32,6 +34,8 @@ class AuthController extends Controller
             'district' => 'required|string',
             'store_phone' => 'required|string',
             'default_branch' => 'required|boolean',
+            'lng' => 'nullable|string',
+            'lat' => 'nullable|string',
         ]);
 
         $user = User::create([
@@ -69,6 +73,8 @@ class AuthController extends Controller
                 'province' => $fields['province'],
                 'phone' => $fields['store_phone'],
                 'status' => 'active',
+                'lat' => $fields['lat'],
+                'lng' => $fields['lng'],
             ]);
         }
 
@@ -96,44 +102,52 @@ class AuthController extends Controller
             'user' => $user,
             'store' => $store,
             'branch' => $branch,
-            
+
         ], 201);
     }
 
-    public function login(Request $request) {
+    public function login(Request $request)
+    {
         $validator = Validator::make($request->all(), [
             'phone' => 'required|string',
             'password' => 'required|string',
         ]);
 
-        if($request['role'] === 'employee') {
+        if ($request['role'] === 'employee') {
             if ($validator->fails()) {
                 return response()->json($validator->errors(), 422);
             }
-    
-            if (! $token = Auth::guard('employee')->attempt($validator->validated())) {
+
+            if (Auth::guard('employee')->attempt($validator->validated())) {
+                $user = Auth::guard('employee')->user();
+                if ($user->status === "deleted" || $user->status === "inactive") {
+                    return response()->json(['error' => 'Unauthorized', 'message' => 'Tài khoản bị ngưng hoạt động hoặc đã xóa'], 401);
+                }
+            }
+
+            if (!$token = Auth::guard('employee')->attempt($validator->validated())) {
                 return response()->json(['error' => 'Unauthorized'], 401);
             }
-    
+
             return $this->createNewEmpToken($token);
-        } 
-        if($request['role'] === 'owner') {
+        }
+        if ($request['role'] === 'owner') {
 
             if ($validator->fails()) {
                 return response()->json($validator->errors(), 422);
             }
-    
-            if (! $token = auth()->attempt($validator->validated())) {
+
+            if (!$token = auth()->attempt($validator->validated())) {
                 return response()->json(['error' => 'Unauthorized'], 401);
             }
-    
+
             return $this->createNewToken($token);
         }
-
     }
 
-    public function employeeLogin(Request $request) {
-        
+    public function employeeLogin(Request $request)
+    {
+
         $validator = Validator::make($request->all(), [
             'phone' => 'required|string',
             'password' => 'required|string',
@@ -143,14 +157,15 @@ class AuthController extends Controller
             return response()->json($validator->errors(), 422);
         }
 
-        if (! $token = Auth::guard('employee')->attempt($validator->validated())) {
+        if (!$token = Auth::guard('employee')->attempt($validator->validated())) {
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 
         return $this->createNewEmpToken($token);
     }
 
-    protected function createNewToken($token) {
+    protected function createNewToken($token)
+    {
         $user = Auth::guard('user')->user();
         $store = Store::where('user_id', $user->id)->get()[0];
         return response()->json([
@@ -163,7 +178,8 @@ class AuthController extends Controller
         ]);
     }
 
-    protected function createNewEmpToken($token){
+    protected function createNewEmpToken($token)
+    {
         $user = Auth::guard('employee')->user();
         $store = Store::where('user_id', $user->store_id)->get()[0];
         // return response()->json([
@@ -187,11 +203,13 @@ class AuthController extends Controller
         ]);
     }
 
-    public function refresh() {
+    public function refresh()
+    {
         return $this->createNewToken(auth()->refresh());
     }
-    
-    public function verifyOwnerToken() {
+
+    public function verifyOwnerToken()
+    {
         if (Auth::guard('user')->user()) {
             $user = Auth::guard('user')->user();
             $store = Store::where('user_id', $user->id)->get()[0];
@@ -199,15 +217,15 @@ class AuthController extends Controller
             return response()->json([
                 'user' => $user,
                 'store' => $store,
-                'role'=> 'owner',
+                'role' => 'owner',
             ]);
-        } else if (Auth::guard('employee')->user()){
+        } else if (Auth::guard('employee')->user()) {
             $user = Auth::guard('employee')->user();
             $store = Store::where('user_id', $user->store_id)->get()[0];
             return response()->json([
                 'user' => Auth::guard('employee')->user(),
                 'store' => $store,
-                'role'=> 'employee',
+                'role' => 'employee',
                 'permission' => $user->priviledges,
             ]);
         } else {
@@ -217,7 +235,8 @@ class AuthController extends Controller
         }
     }
 
-    public function logout() {
+    public function logout()
+    {
         auth()->logout();
 
         return response()->json(['message' => 'User successfully signed out']);

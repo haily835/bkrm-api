@@ -24,6 +24,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\AddressController;
 use App\Http\Controllers\InventoryCheckController;
+use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\StoreReportController;
 use Intervention\Image\Facades\Image;
 
@@ -57,20 +58,24 @@ Route::group(['middleware' => ['auth:user,employee']], function () {
     Route::post('/stores', [StoreController::class, 'store']);
     Route::put('/stores/{store:uuid}', [StoreController::class, 'update']);
     Route::delete('/stores/{store:uuid}', [StoreController::class, 'destroy']);
-    Route::get('/stores/{store:uuid}/activities', [StoreController::class, 'activities']); 
-    
+    Route::get('/stores/{store:uuid}/activities', [StoreController::class, 'activities']);
+
     // routes for report of store
-    Route::get('/stores/{store:uuid}/report/overview', [StoreReportController::class, 'overview']); 
-    Route::get('/stores/{store:uuid}/report/statistic', [StoreReportController::class, 'statistic']); 
-    Route::get('/stores/{store:uuid}/report/top', [StoreReportController::class, 'getTopOfStore']); 
-    Route::get('/stores/{store:uuid}/report/item', [StoreReportController::class, 'getReportItems']); 
-    Route::get('/stores/{store:uuid}/report/category', [StoreReportController::class, 'getReportCategories']); 
-    
+    Route::get('/stores/{store:uuid}/report/overview', [StoreReportController::class, 'overview']);
+    Route::get('/stores/{store:uuid}/report/statistic', [StoreReportController::class, 'statistic']);
+    Route::get('/stores/{store:uuid}/report/top', [StoreReportController::class, 'getTopOfStore']);
+    Route::get('/stores/{store:uuid}/report/item', [StoreReportController::class, 'getReportItems']);
+    Route::get('/stores/{store:uuid}/report/category', [StoreReportController::class, 'getReportCategories']);
+
+    // routes for schedule
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/getSchedule', [ScheduleController::class, 'getSchedule']);
+    Route::post('/stores/{store:uuid}/branches/{branch:uuid}/createSchedule', [ScheduleController::class, 'createSchedule']);
+
     Route::get('/stores/{store:uuid}/employees', [EmployeeController::class, 'index']);
     Route::post('/stores/{store:uuid}/employees', [EmployeeController::class, 'store']);
     Route::get('/stores/{store:uuid}/employees/{employee:uuid}', [EmployeeController::class, 'show']);
-    Route::put('/stores/{store:uuid}/employees/{employee:uuid}', [EmployeeController::class, 'update']);
-    Route::delete('/stores/{store:uuid}/employees/{employee:uuid}', [EmployeeController::class, 'destroy']); 
+    Route::post('/stores/{store:uuid}/employees/{employee:uuid}', [EmployeeController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/employees/{employee:uuid}', [EmployeeController::class, 'destroy']);
     Route::post('/stores/{store:uuid}/employees/{employee:uuid}/permissions', [EmployeeController::class, 'permissions']);
     Route::get('/stores/{store:uuid}/employees/{employee:uuid}/permissions', [EmployeeController::class, 'getEmpPermissions']);
 
@@ -84,6 +89,7 @@ Route::group(['middleware' => ['auth:user,employee']], function () {
     Route::delete('/stores/{store:uuid}/products/{product:uuid}/suppliers/{supplier}', [ProductController::class, 'deleteSupplier']);
 
     Route::get('/stores/{store:uuid}/products', [ProductController::class, 'index']);
+    Route::post('/stores/{store:uuid}/products/addProductByJson', [ProductController::class, 'addProductByJson']);
     Route::get('/stores/{store:uuid}/branches/{branch:uuid}/products', [ProductController::class, 'indexOfBranch']);
     Route::get('/stores/{store:uuid}/search-products', [ProductController::class, 'search']);
     Route::get('/stores/{store:uuid}/branches/{branch:uuid}/search-products', [ProductController::class, 'searchBranchInventory']);
@@ -95,6 +101,7 @@ Route::group(['middleware' => ['auth:user,employee']], function () {
     Route::post('/stores/{store:uuid}/products/{product:uuid}/inactive', [ProductController::class, 'inactive']);
 
     Route::get('/stores/{store:uuid}/branches', [BranchController::class, 'index']);
+    Route::get('/stores/{store:uuid}/branches/getAllBranches', [BranchController::class, 'getAllBranches']);
     Route::post('/stores/{store:uuid}/branches', [BranchController::class, 'store']);
     Route::get('/stores/{store:uuid}/branches/{branch:uuid}', [BranchController::class, 'show']);
     Route::put('/stores/{store:uuid}/branches/{branch:uuid}', [BranchController::class, 'update']);
@@ -164,4 +171,6 @@ Route::group(['middleware' => ['auth:user,employee']], function () {
 
     Route::get('/stores/{store:uuid}/branches/{branch:uuid}/inventory', [InventoryTransactionController::class, 'index']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+   
 });

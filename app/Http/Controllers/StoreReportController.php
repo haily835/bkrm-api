@@ -21,12 +21,12 @@ class StoreReportController extends Controller
     $numOfCustomers = $store->customers()->where('status', 'active')->count();
     $numOfBranches = $store->branches()->where('status', 'active')->count();
 
-    $start_date = $request->query('start_date') ?
-      $request->query('start_date') . ' 00:00:00'
+    $start_date = $request->query('from_date') ?
+      $request->query('from_date') . ' 00:00:00'
       : "";
 
-    $end_date = $request->query('end_date') ?
-      $request->query('start_date') . ' 11:59:59'
+    $end_date = $request->query('to_date') ?
+      $request->query('to_date') . ' 11:59:59'
       : "";
 
     $purchaseOrders = $store->purchaseOrders()

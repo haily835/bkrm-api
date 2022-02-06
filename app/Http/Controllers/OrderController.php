@@ -23,7 +23,7 @@ class OrderController extends Controller
         $start_date = $request->query('startDate');
         $end_date = $request->query('endDate');
         $min_total_amount = $request->query('minTotalAmount');
-        $max_total_amount = $request->query ('maxTotalAmount');
+        $max_total_amount = $request->query('maxTotalAmount');
         $min_discount = $request->query('minDiscount');
         $max_discount = $request->query('maxDiscount');
         $status = $request->query('status');
@@ -33,40 +33,40 @@ class OrderController extends Controller
         // set up query
         $queries = [];
 
-        if($order_code) {
+        if ($order_code) {
             array_push($queries, ['orders.order_code', 'LIKE', $order_code]);
         }
 
 
-        if($start_date) {
+        if ($start_date) {
             array_push($queries, ['orders.created_at', '>=', $start_date . ' 00:00:00']);
         }
 
-        if($end_date) {
+        if ($end_date) {
             array_push($queries, ['orders.created_at', '<=', $end_date . ' 00:00:00']);
         }
 
-        if($min_total_amount) {
+        if ($min_total_amount) {
             array_push($queries, ['orders.total_amount', '>=', $min_total_amount]);
         }
 
-        if($max_total_amount) {
+        if ($max_total_amount) {
             array_push($queries, ['orders.total_amount', '<=', $max_total_amount]);
         }
 
-        if($min_discount) {
+        if ($min_discount) {
             array_push($queries, ['orders.discount', '>=', $min_total_amount]);
         }
 
-        if($max_discount) {
+        if ($max_discount) {
             array_push($queries, ['orders.discount', '<=', $max_discount]);
         }
 
-        if($status) {
+        if ($status) {
             array_push($queries, ['orders.status', '>=', $min_total_amount]);
         }
 
-        if($payment_method) {
+        if ($payment_method) {
             array_push($queries, ['payment_method', '<=', $payment_method]);
         }
 
@@ -75,27 +75,28 @@ class OrderController extends Controller
             ->join('customers', 'orders.customer_id', '=', 'customers.id')
             ->join('branches', 'orders.branch_id', '=', 'branches.id')
             ->select('orders.*', 'customers.name as customer_name', 'branches.name as branch_name')->get();
-        
-        
+
+
         return response()->json([
             'data' => $orders,
         ], 200);
-        
     }
 
-    public function getStoreOrder(Store $store) {
+    public function getStoreOrder(Store $store)
+    {
         $data = $store->orders()
             ->join('customers', 'orders.customer_id', '=', 'customers.id')
             ->join('branches', 'orders.branch_id', '=', 'branches.id')
             ->select('orders.*', 'customers.name as customer_name', 'branches.name as branch_name')->get();
-                                    
+
         return response()->json([
             'data' => $data,
         ]);
     }
 
 
-    public function addOrder(Request $request, Store $store, Branch $branch) {
+    public function addOrder(Request $request, Store $store, Branch $branch)
+    {
         $validated = $request->validate([
             'customer_uuid' => 'required|string',
             'paid_date' => 'required|date_format:Y-m-d H:i:s',
@@ -117,7 +118,7 @@ class OrderController extends Controller
         if (Auth::guard('user')->user()) {
             $created_by = Auth::guard('user')->user()->id;
             $created_user_type = 'owner';
-        } else if (Auth::guard('employee')->user()){
+        } else if (Auth::guard('employee')->user()) {
             $created_by = Auth::guard('employee')->user()->id;
             $created_user_type = 'employee';
         } else {
@@ -126,12 +127,12 @@ class OrderController extends Controller
             ], 401);
         }
 
-        $customer_id = $store->customers()->where('uuid',$validated['customer_uuid'])->first()->id;
+        $customer_id = $store->customers()->where('uuid', $validated['customer_uuid'])->first()->id;
 
         # generate code
         $last_id = $store->orders()->count();
 
-        $orderCode = 'DH' . sprintf( '%06d', $last_id );
+        $orderCode = 'DH' . sprintf('%06d', $last_id);
 
         $order = Order::create([
             'store_id' => $store->id,
@@ -152,7 +153,7 @@ class OrderController extends Controller
         ]);
 
 
-        
+
 
         foreach ($validated['details'] as $detail) {
             $product_id = $store->products->where('uuid', '=', $detail['uuid'])->first()->id;
@@ -203,7 +204,7 @@ class OrderController extends Controller
 
         # generate code
         $last_id = $store->invoices()->count();
-        $invoiceCode = 'HD' . sprintf( '%06d', $last_id );
+        $invoiceCode = 'HD' . sprintf('%06d', $last_id);
 
         $invoice = Invoice::create([
             'uuid' => (string) Str::uuid(),
@@ -224,7 +225,6 @@ class OrderController extends Controller
                 'invoice' => $invoice,
             ]
         ], 200);
-
     }
 
     public function store(Request $request, Store $store, Branch $branch)
@@ -256,8 +256,8 @@ class OrderController extends Controller
     public function show(Store $store, Order $order)
     {
         $details = $order->orderDetails()
-        ->join('products', 'order_details.product_id', '=', 'products.id')
-        ->select('order_details.*', 'products.name', 'products.bar_code')->get();
+            ->join('products', 'order_details.product_id', '=', 'products.id')
+            ->select('order_details.*', 'products.name', 'products.bar_code')->get();
 
         if ($order->created_user_type === 'owner') {
             $created_by = User::where('id', $order->user_id)->first();
@@ -280,19 +280,16 @@ class OrderController extends Controller
     public function update(Request $request, Store $store, Branch $branch, Order $order)
     {
         $validated = $request->validate([
-            'customer_id' => 'required|numeric',
             'paid_date' => 'nullable|date_format:Y-m-d',
             'payment_type' => 'nullable|date_format:Y-m-d',
-            'payment_amount' => 'nullable|numeric',
+            'paid_amount' => 'nullable|numeric',
             'payment_method' => 'nullable|string',
             'notes' => 'nullable|string',
-            'status' => 'nullable|string|in:new,invoiced,shipped,closed',
+            'status' => 'nullable|string',
         ]);
 
         $order->update($validated);
 
-        if ($validated['status'] === 'closed') {
-        }
 
         return response()->json([
             'message' => 'Order updated successfully',

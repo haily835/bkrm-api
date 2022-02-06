@@ -12,7 +12,7 @@ class Branch extends Model
     protected $guarded = [];
 
     protected $hidden = [
-        'id',
+
         'store_id'
     ];
 
@@ -46,7 +46,13 @@ class Branch extends Model
         return $this->hasMany(BranchInventory::class);
     }
 
-    public function inventoryChecks() {
+    public function inventoryChecks()
+    {
         return $this->hasMany(InventoryCheck::class);
+    }
+
+    public function shifts()
+    {
+        return $this->hasMany(Shift::class);
     }
 }

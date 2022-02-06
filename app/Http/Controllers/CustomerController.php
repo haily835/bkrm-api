@@ -6,6 +6,7 @@ use App\Models\Store;
 use App\Models\Customer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Intervention\Image\Facades\Image;
 
 class CustomerController extends Controller
 {
@@ -16,7 +17,7 @@ class CustomerController extends Controller
         ], 200);
     }
 
- 
+
     public function store(Request $request, Store $store)
     {
         $validated = $request->validate([
@@ -27,12 +28,26 @@ class CustomerController extends Controller
             'city' => 'nullable|string',
             'province' => 'nullable|string',
             'payment_info' => 'nullable|string',
+            'image' => 'nullable'
         ]);
 
-        $supplier = Customer::create(array_merge([
-            'store_id' => $store->id,
-            'uuid' => (string) Str::uuid()
-        ],
+        $imagePath = "";
+        if (array_key_exists('image', $validated)) {
+            if ($validated['image'] != null) {
+                $imagePath = $validated['image']->store('customer-images', 'public');
+                $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
+                $sized_image->save();
+            }
+        } else {
+            $imagePath = 'http://103.163.118.100/bkrm-api/storage/app/public/customer-images/customer-default.png';
+        }
+
+        $supplier = Customer::create(array_merge(
+            [
+                'store_id' => $store->id,
+                'uuid' => (string) Str::uuid(),
+                'img_url' => $imagePath,
+            ],
             $validated
         ));
 
@@ -70,12 +85,12 @@ class CustomerController extends Controller
 
     public function destroy(Store $store, Customer $customer)
     {
-        $numOfCust = $store->customers()->where('status', 'active')->count();  
+        $numOfCust = $store->customers()->where('status', 'active')->count();
         if ($numOfCust <= 1) {
             return response()->json([
-            'message' => 'Can not delete last customer',
-            'data' => $customer
-        ], 404);
+                'message' => 'Can not delete last customer',
+                'data' => $customer
+            ], 404);
         }
 
         $customer->update(['status' => 'deleted']);
