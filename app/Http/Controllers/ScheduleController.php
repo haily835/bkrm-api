@@ -16,8 +16,8 @@ class ScheduleController extends Controller
   {
     $validated = $request->validate([
       "name" => "required|string",
-      "start_time" => "required|date_format:H:i:s",
-      "end_time" => "required|date_format:H:i:s",
+      "start_time" => "required|date_format:H:i",
+      "end_time" => "required|date_format:H:i",
     ]);
 
     $success = DB::table('shifts')->insert(
@@ -99,12 +99,28 @@ class ScheduleController extends Controller
   {
     $shifts = $branch->shifts;
 
+    $selected_date = $request->query('selected_date');
+
+    $mode = $request->query('mode');
+
+    $from_date = $to_date = '';
+
+    if ($mode === "day") {
+      $from_date = $to_date = $selected_date;
+    } else if ($mode === "month") {
+      $from_date = date('Y-m-01',  strtotime($selected_date));
+      $to_date = date('Y-m-t', strtotime($selected_date));
+    } else {
+      $from_date = date("Y-m-d", strtotime('monday this week', strtotime($selected_date)));   
+      $to_date = date("Y-m-d", strtotime('sunday this week', strtotime($selected_date)));
+    }
+
     $data = [];
     foreach($shifts as $shift) {
 
       $schedules = $shift->schedules()
-      ->where('schedules.date', '>=', $request->query('from_date'))
-      ->where('schedules.date', '<=', $request->query('to_date'))
+      ->where('schedules.date', '>=', $from_date)
+      ->where('schedules.date', '<=', $to_date)
       ->join('employees', 'employees.id', '=', 'schedules.employee_id')
       ->select('schedules.*' ,'employees.name as employee_name', 'employees.img_url as employee_img_url')
       ->get()->toArray();
@@ -128,7 +144,26 @@ class ScheduleController extends Controller
 
     return response()->json([
       'data' => $data,
+      'mode' => $mode,
+      'selected_date' => $selected_date,
     ]);
+  }
+
+  // this is used for booking a shift for an employee form
+  public function getEmpAndShiftOfBranch(Request $request, Store $store, Branch $branch) {
+    $shifts = $branch->shifts;
+    $employees = DB::table('employee_work_branch')
+      ->where('employee_work_branch.branch_id', $branch->id)
+      ->leftJoin('employees', 'employees.id', '=', 'employee_work_branch.employee_id')
+      ->where('employees.status', 'active')
+      ->get();
+
+    return response()->json([
+      'data' => [
+        'shifts' => $shifts,
+        'employees' => $employees,
+      ]
+      ]);
   }
 
   private function getDateForSpecificDayBetweenDates($startDate, $endDate, $day_number)

@@ -69,7 +69,9 @@ Route::group(['middleware' => ['auth:user,employee']], function () {
 
     // routes for schedule
     Route::get('/stores/{store:uuid}/branches/{branch:uuid}/getSchedule', [ScheduleController::class, 'getSchedule']);
+    Route::post('/stores/{store:uuid}/branches/{branch:uuid}/createShift', [ScheduleController::class, 'createShift']);
     Route::post('/stores/{store:uuid}/branches/{branch:uuid}/createSchedule', [ScheduleController::class, 'createSchedule']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/getEmpAndShiftOfBranch', [ScheduleController::class, 'getEmpAndShiftOfBranch']);
 
     Route::get('/stores/{store:uuid}/employees', [EmployeeController::class, 'index']);
     Route::post('/stores/{store:uuid}/employees', [EmployeeController::class, 'store']);
