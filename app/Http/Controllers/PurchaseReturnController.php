@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\Employee;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
 
 class PurchaseReturnController extends Controller
 {
@@ -173,6 +174,10 @@ class PurchaseReturnController extends Controller
             $newQuantity = (string)((int) $product->quantity_available) - ((int) $detail['quantity']);
             $product->update(['quantity_available' => $newQuantity]);
             
+            DB::table('purchase_order_details')
+                ->where('id', '=', $detail['purchase_order_detail_id'])
+                ->update(['returned_quantity' => $detail['quantity']]);
+
             $productOfStore = BranchInventory::where([
                 ['branch_id', '=', $branch->id], ['product_id', '=', $detail['product_id']]])->first();
 

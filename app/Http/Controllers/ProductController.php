@@ -85,10 +85,12 @@ class ProductController extends Controller
                 ->orWhere('bar_code', 'LIKE', '%' . $search_key . '%')
                 ->where('status', '<>', 'inactive')
                 ->where('status', '<>', 'deleted')
+                ->limit(10)
                 ->get()->toArray();
         } else {
             $products = $store->products()
                 ->where('status', '<>', 'deleted')
+                ->limit(10)
                 ->get()->toArray();
         }
 
@@ -119,10 +121,11 @@ class ProductController extends Controller
             $products = $store->products()
                 ->where('name', 'LIKE', '%' . $search_key . '%')
                 ->orWhere('bar_code', 'LIKE', '%' . $search_key . '%')
+                ->limit(10)
                 ->get()
                 ->toArray();
         } else {
-            $products = $store->products()->get()->toArray();
+            $products = $store->products()->limit(10)->get()->toArray();
         }
 
         $data = [];

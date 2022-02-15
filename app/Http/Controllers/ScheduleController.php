@@ -55,7 +55,7 @@ class ScheduleController extends Controller
 
     // 0 -> 6: Sun Mon -> ...
     $date_list = [];
-    $week_day = explode (",", $validated['week_day']);
+    $week_day = explode(",", $validated['week_day']);
 
     // get all Week days date in the period
     foreach ($week_day as $day) {
@@ -72,10 +72,10 @@ class ScheduleController extends Controller
         return 0;
     });
 
-    
+
     $schedules = [];
 
-    foreach($date_list as $date) {
+    foreach ($date_list as $date) {
       array_push($schedules, [
         'employee_id' => $validated['employee_id'],
         'shift_id' => $validated['shift_id'],
@@ -111,19 +111,19 @@ class ScheduleController extends Controller
       $from_date = date('Y-m-01',  strtotime($selected_date));
       $to_date = date('Y-m-t', strtotime($selected_date));
     } else {
-      $from_date = date("Y-m-d", strtotime('monday this week', strtotime($selected_date)));   
+      $from_date = date("Y-m-d", strtotime('monday this week', strtotime($selected_date)));
       $to_date = date("Y-m-d", strtotime('sunday this week', strtotime($selected_date)));
     }
 
     $data = [];
-    foreach($shifts as $shift) {
+    foreach ($shifts as $shift) {
 
       $schedules = $shift->schedules()
-      ->where('schedules.date', '>=', $from_date)
-      ->where('schedules.date', '<=', $to_date)
-      ->join('employees', 'employees.id', '=', 'schedules.employee_id')
-      ->select('schedules.*' ,'employees.name as employee_name', 'employees.img_url as employee_img_url')
-      ->get()->toArray();
+        ->where('schedules.date', '>=', $from_date)
+        ->where('schedules.date', '<=', $to_date)
+        ->join('employees', 'employees.id', '=', 'schedules.employee_id')
+        ->select('schedules.*', 'employees.name as employee_name', 'employees.img_url as employee_img_url', 'employees.phone as employee_phone')
+        ->get()->toArray();
 
       $schedules = array_map(function ($v) {
         return [
@@ -132,6 +132,7 @@ class ScheduleController extends Controller
           'status' => $v['status'],
           'date' => date("d/m/Y", strtotime($v['date'])),
           'employee_img_url' => $v['employee_img_url'],
+          'employee_phone' => $v['employee_phone'],
           'schedule_id' => $v['id']
         ];
       }, $schedules);
@@ -150,7 +151,8 @@ class ScheduleController extends Controller
   }
 
   // this is used for booking a shift for an employee form
-  public function getEmpAndShiftOfBranch(Request $request, Store $store, Branch $branch) {
+  public function getEmpAndShiftOfBranch(Request $request, Store $store, Branch $branch)
+  {
     $shifts = $branch->shifts;
     $employees = DB::table('employee_work_branch')
       ->where('employee_work_branch.branch_id', $branch->id)
@@ -163,7 +165,7 @@ class ScheduleController extends Controller
         'shifts' => $shifts,
         'employees' => $employees,
       ]
-      ]);
+    ]);
   }
 
   private function getDateForSpecificDayBetweenDates($startDate, $endDate, $day_number)
@@ -174,5 +176,21 @@ class ScheduleController extends Controller
       $date_array[] = date('Y-m-d', $i);
 
     return $date_array;
+  }
+
+
+  public function checkAttendance(Request $request, Store $store, Branch $branch)
+  {
+    $validated = $request->validate([
+      "data" => "required|array"
+    ]);
+
+    foreach ($validated["data"] as $schedule) {
+      DB::table('schedules')->where('id', $schedule['schedule_id'])->update(['status' => $schedule['status']]);
+    }
+
+    return response()->json([
+      'message' => 'updated schedule'
+    ]);
   }
 }

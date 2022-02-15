@@ -15,22 +15,24 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\Employee;
 use Illuminate\Support\Str;
-
+use Illuminate\Support\Facades\DB;
 
 class RefundController extends Controller
 {
-    public function getStoreRefund(Store $store) {
+    public function getStoreRefund(Store $store)
+    {
         $data = $store->refunds()
             ->join('customers', 'refunds.customer_id', '=', 'customers.id')
             ->join('branches', 'refunds.branch_id', '=', 'branches.id')
             ->select('refunds.*', 'customers.name as customer_name', 'branches.name as branch_name')->get();
-                                    
+
         return response()->json([
             'data' => $data,
         ]);
     }
 
-    public function removeInventory(Request $request, Store $store, Branch $branch) {
+    public function removeInventory(Request $request, Store $store, Branch $branch)
+    {
         $validated = $request->validate([
             'order_uuid' => 'required|string',
             'customer_id' => 'required|numeric',
@@ -49,7 +51,7 @@ class RefundController extends Controller
         if (Auth::guard('user')->user()) {
             $created_by = $approved_by = Auth::guard('user')->user()->id;
             $created_user_type = 'owner';
-        } else if (Auth::guard('employee')->user()){
+        } else if (Auth::guard('employee')->user()) {
             $created_by = $approved_by = Auth::guard('employee')->user()->id;
             $created_user_type = 'employee';
         } else {
@@ -60,11 +62,14 @@ class RefundController extends Controller
 
         $creation_date = $approved_date = $validated['import_date'];
 
-        $order_id = $store->orders()->where('uuid',$validated['order_uuid'])->first()->id;
+        $order = $store->orders()->where('uuid', $validated['order_uuid'])->first();
+        $order_id = $order->id;
+
+
 
         $last_id = $store->refunds()->count();
 
-        $refundCode = 'TH' . sprintf( '%06d', $last_id );
+        $refundCode = 'TH' . sprintf('%06d', $last_id);
 
         $refund = Refund::create([
             'store_id' => $store->id,
@@ -79,7 +84,9 @@ class RefundController extends Controller
             'created_user_type' => $created_user_type,
             'order_id' => $order_id,
             'status' => $validated['status'],
+            'created_at' => $validated['import_date']
         ]);
+
 
         foreach ($validated['details'] as $detail) {
             $inventoryTransaction = InventoryTransaction::create([
@@ -102,10 +109,14 @@ class RefundController extends Controller
                 'posted_to_inventory' => true,
             ]);
 
+            DB::table('order_details')
+                ->where('id', '=', $detail['order_detail_id'])
+                ->update(['returned_quantity' => $detail['quantity']]);
+
             $product = $store->products->where('id', '=', $detail['product_id'])->first();
             $newQuantity = (string)((int) $product->quantity_available) + ((int) $detail['quantity']);
             $product->update(['quantity_available' => $newQuantity]);
-            
+
             // update branch inventory table
             $productOfStore = BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product->id]])->first();
 
@@ -134,7 +145,7 @@ class RefundController extends Controller
         $start_date = $request->query('startDate');
         $end_date = $request->query('endDate');
         $min_total_amount = $request->query('minTotalAmount');
-        $max_total_amount = $request->query ('maxTotalAmount');
+        $max_total_amount = $request->query('maxTotalAmount');
         $status = $request->query('status');
         $payment_method = $request->query('paymentMethod');
         $order_code = $request->query('orderCode');
@@ -147,32 +158,32 @@ class RefundController extends Controller
             array_push($queries, ['refunds.refund_code', 'LIKE', $refund_code]);
         }
 
-        if($start_date) {
+        if ($start_date) {
             array_push($queries, ['refunds.created_at', '>=', $start_date]);
         }
 
-        if($end_date) {
+        if ($end_date) {
             array_push($queries, ['refunds.created_at', '<=', $end_date]);
         }
 
-        if($min_total_amount) {
+        if ($min_total_amount) {
             array_push($queries, ['refunds.total_amount', '>=', $min_total_amount]);
         }
 
-        if($max_total_amount) {
+        if ($max_total_amount) {
             array_push($queries, ['refunds.total_amount', '<=', $max_total_amount]);
         }
 
-        
-        if($status) {
+
+        if ($status) {
             array_push($queries, ['refunds.status', '>=', $min_total_amount]);
         }
 
-        if($payment_method) {
+        if ($payment_method) {
             array_push($queries, ['payment_method', '<=', $payment_method]);
         }
 
-        if($order_code) {
+        if ($order_code) {
             $order = $store->orders()->where('order_code', $order_code)->first();
             if ($order) {
                 array_push($queries, ['order_id', '=', $order->id]);
@@ -184,8 +195,8 @@ class RefundController extends Controller
             ->join('customers', 'refunds.customer_id', '=', 'customers.id')
             ->join('branches', 'refunds.branch_id', '=', 'branches.id')
             ->select('refunds.*', 'customers.name as customer_name', 'branches.name as branch_name')->get();
-        
-        
+
+
         return response()->json([
             'data' => $refunds,
         ], 200);
@@ -210,7 +221,7 @@ class RefundController extends Controller
 
         $order = Order::find($invoice->order_id)->first();
 
-        
+
         $refund = Refund::create(array_merge(
             [
                 'customer_id' => $order->customer_id,
@@ -231,8 +242,8 @@ class RefundController extends Controller
     public function show(Store $store, Refund $refund)
     {
         $details = $refund->refundDetails()
-        ->join('products', 'refund_details.product_id', '=', 'products.id')
-        ->select('refund_details.*', 'products.name', 'products.bar_code')->get();
+            ->join('products', 'refund_details.product_id', '=', 'products.id')
+            ->select('refund_details.*', 'products.name', 'products.bar_code')->get();
 
         if ($refund->created_user_type === 'owner') {
             $created_by = User::where('id', $refund->created_by)->first();
@@ -243,7 +254,7 @@ class RefundController extends Controller
             'customer' => $refund->customer,
             'branch' => $refund->branch,
             'details' => $details,
-            'order'=> $refund->order,
+            'order' => $refund->order,
             'created_by_user' => $created_by,
         ], $refund->toArray());
 
@@ -266,7 +277,7 @@ class RefundController extends Controller
             'data' => $refund,
         ], 200);
     }
-    
+
     public function destroy(Store $store, Branch $branch, Refund $refund)
     {
         $isdeleted = Refund::destroy($refund->id);
