@@ -6,13 +6,36 @@ use App\Models\Category;
 use App\Models\Store;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CategoryController extends Controller
 {
-    public function index(Store $store) {
+    public function index(Store $store)
+    {
         return response()->json([
             'data' => $store->categories,
         ], 200);
+    }
+
+    private function getSubCategory($parent_id)
+    {
+        $categories = Category::all()->where('parent_category_id', $parent_id)->toArray();
+        $data = [];
+        foreach ($categories as $category) {
+            $children = $this->getSubCategory($category['id']);
+            array_push($data, array_merge($category, ['children' => $children]));
+        }
+        return $data;
+    }
+
+    public function getNestedCategory(Store $store)
+    {
+        $top_parents = $store->categories()->whereNull('parent_category_id')->get()->toArray();
+        $data = [];
+        foreach ($top_parents as $parent) {
+            array_push($data, array_merge($parent, ['children' => $this->getSubCategory($parent['id'])]));
+        }
+        return $data;
     }
 
     public function getParentCategory(Store $store)
@@ -20,8 +43,8 @@ class CategoryController extends Controller
         $categories = $store->categories()->whereNull('parent_category_id')->get();
 
         $data = [];
-        
-        foreach($categories as $category) {
+
+        foreach ($categories as $category) {
             $children = $category->children;
             array_push($data, array_merge($category->toArray(), ['children' => $children]));
         }
@@ -35,7 +58,7 @@ class CategoryController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string',
-            'parent_category_uuid'=> 'nullable|string',
+            'parent_category_uuid' => 'nullable|string',
         ]);
 
 
@@ -47,7 +70,7 @@ class CategoryController extends Controller
                 ]
             ]);
         }
-        
+
         $category = ['name' => $validated['name']];
 
         if ($validated['parent_category_uuid']) {
@@ -60,9 +83,8 @@ class CategoryController extends Controller
             'store_id' => $store->id
         ]));
         return response()->json([
-            'data'=> $created
+            'data' => $created
         ], 200);
-        
     }
 
     public function show(Store $store, Category $category)
@@ -71,13 +93,13 @@ class CategoryController extends Controller
 
         $data = [];
 
-        foreach($children as $child) {
+        foreach ($children as $child) {
             $grand_children = $child->children;
             array_push($data, array_merge($child->toArray(), ['children' => $grand_children]));
         }
 
         return response()->json([
-            'data'=> $data
+            'data' => $data
         ]);
     }
 
@@ -85,13 +107,13 @@ class CategoryController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string',
-            'parent_category_uuid'=> 'nullable|string',
+            'parent_category_uuid' => 'nullable|string',
         ]);
 
         $newCategory = ['name' => $validated['name']];
 
         if (array_key_exists('parent_category_uuid', $validated)) {
-            if($validated['parent_category_uuid'] != "") {
+            if ($validated['parent_category_uuid'] != "") {
                 $parent_id = Category::where('uuid', $validated['parent_category_uuid'])->first()->id;
                 $newCategory = array_merge($category, ['parent_category_id' => $parent_id]);
             }
@@ -100,7 +122,7 @@ class CategoryController extends Controller
         $category->update($newCategory);
 
         return response()->json([
-            'data'=> $category
+            'data' => $category
         ], 200);
     }
 

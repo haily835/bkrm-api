@@ -6,38 +6,65 @@ use App\Models\BranchInventory;
 use Illuminate\Http\Request;
 use App\Models\Product;
 use App\Models\Store;
-use App\Models\Supplier;
 use App\Models\Category;
-use App\Models\ProductSupplier;
 use App\Models\Branch;
 use Intervention\Image\Facades\Image;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use App\Models\Barcode;
-use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Validator;
+use Psy\Util\Json;
 
 class ProductController extends Controller
 {
     public function indexOfBranch(Request $request, Store $store, Branch $branch)
     {
         $search_key = $request->query("searchKey");
+        $limit = $request->query("limit") ? $request->query("limit") : 10;
+        $page = $request->query("page") ? $request->query("page") : 1;
 
         $products = [];
+        $total_rows = $store
+            ->products()
+            ->where([
+                ['store_id', $store->id],
+                ['name', 'LIKE', '%' . $search_key . '%'],
+                ['status', '<>', 'inactive'],
+                ['status', '<>', 'deleted'],
+                ['has_variance', true]
+            ])
+            ->orWhere([
+                ['store_id', $store->id],
+                ['bar_code', 'LIKE', '%' . $search_key . '%'],
+                ['status', '<>', 'inactive'],
+                ['status', '<>', 'deleted'],
+            ['has_variance', true]
+            ]);
 
         if ($search_key) {
-            $products = $store->products()
-                ->where('store_id', $store->id)
-                ->where('name', 'LIKE', '%' . $search_key . '%')
-                // ->orWhere('bar_code', 'LIKE','%' . $search_key . '%')
-                ->where('status', '<>', 'inactive')
-                ->where('status', '<>', 'deleted')
-                ->get()->toArray();
+            $products = $total_rows->get()->toArray();
+            $total_row = $total_rows->count();
         } else {
             $products = $store->products()
-                ->where('status', '<>', 'deleted')
-                ->orderBy('created_at', 'DESC')
+                ->where([
+                    ['store_id', $store->id],
+                    ['status', '<>', 'inactive'],
+                    ['status', '<>', 'deleted'],
+                ])
+                ->whereNull('parent_product_code')
+               ->orderBy('created_at', 'desc')
+                ->offset(($page - 1) * $limit)
+                ->limit($limit)
                 ->get()->toArray();
+            $total_row = $store->products()
+                ->where([
+                    ['store_id', $store->id],
+                    ['status', '<>', 'inactive'],
+                    ['status', '<>', 'deleted'],
+                ])
+                ->whereNull('parent_product_code')
+               
+                ->count();
         }
 
         $data = [];
@@ -63,7 +90,7 @@ class ProductController extends Controller
             }
 
             array_push($data, array_merge($product, [
-                'img_url' => $firstImageUrl->url,
+                'img_url' => $firstImageUrl ? $firstImageUrl->url : "http://103.163.118.100/bkrm-api/storage/app/public/product-images/product-default.png",
                 'category' => $category,
                 'branch_quantity' => $branch_quantity,
             ]));
@@ -71,43 +98,7 @@ class ProductController extends Controller
 
         return response()->json([
             'data' => $data,
-        ], 200);
-    }
-
-    public function index(Request $request, Store $store)
-    {
-        $search_key = $request->query("searchKey");
-
-        $products = [];
-
-        if ($search_key) {
-            $products = $store->products()->where('name', 'LIKE', '%' . $search_key . '%')
-                ->orWhere('bar_code', 'LIKE', '%' . $search_key . '%')
-                ->where('status', '<>', 'inactive')
-                ->where('status', '<>', 'deleted')
-                ->limit(10)
-                ->get()->toArray();
-        } else {
-            $products = $store->products()
-                ->where('status', '<>', 'deleted')
-                ->limit(10)
-                ->get()->toArray();
-        }
-
-        $data = [];
-
-        foreach ($products as $product) {
-            $firstImageUrl = DB::table('images')->where('entity_uuid', $product['uuid'])->get('url')->first();
-            $category = $store->categories->where('id', $product['category_id'])->first();
-            unset($product['category_id']);
-            array_push($data, array_merge($product, [
-                'img_url' => $firstImageUrl->url,
-                'category' => $category,
-            ]));
-        }
-
-        return response()->json([
-            'data' => $data,
+            'total_rows' => $total_row
         ], 200);
     }
 
@@ -119,8 +110,20 @@ class ProductController extends Controller
 
         if ($search_key) {
             $products = $store->products()
-                ->where('name', 'LIKE', '%' . $search_key . '%')
-                ->orWhere('bar_code', 'LIKE', '%' . $search_key . '%')
+                ->where([
+                    ['store_id', $store->id],
+                    ['name', 'LIKE', '%' . $search_key . '%'],
+                    ['status', '<>', 'inactive'],
+                    ['status', '<>', 'deleted'],
+                    ['has_variance', false]
+                ])
+                ->orWhere([
+                    ['store_id', $store->id],
+                    ['bar_code', 'LIKE', '%' . $search_key . '%'],
+                    ['status', '<>', 'inactive'],
+                    ['status', '<>', 'deleted'],
+                    ['has_variance', false]
+                ])
                 ->limit(10)
                 ->get()
                 ->toArray();
@@ -174,7 +177,7 @@ class ProductController extends Controller
             'min_reorder_quantity' => ['numeric', 'nullable'],
             'images' => 'nullable',
             'description' => 'string|nullable',
-            'img_url' => 'nullable|string'
+            'img_url' => 'nullable|string',
         ]);
 
         $product_uuid = (string) Str::uuid();
@@ -229,7 +232,6 @@ class ProductController extends Controller
 
         $category = Category::where('uuid', $data['category_uuid'])->first();
 
-
         $barcode = "";
         // create barcode if user not specify
         if (array_key_exists('bar_code', $data)) {
@@ -243,37 +245,180 @@ class ProductController extends Controller
             $last_id = count($store->products);
             $barcode = 'SP' . sprintf('%04d', $last_id);
         }
+    }
 
-        $newProduct =  Product::create([
+    public function addProductWithVariation(Request $request, Store $store)
+    {
+        /////////// validation ////////////
+        $data = $request->validate([
+            'variations' => 'required|array',
+            'category_uuid' => 'required|string',
+            'name' => 'required|string',
+            'product_code' => 'nullable|string',
+            'list_price' => ['numeric', 'required'],
+            'standard_price' => ['numeric', 'required'],
+            'quantity_per_unit' => ['string', 'nullable'],
+            'min_reorder_quantity' => ['numeric', 'nullable'],
+            'images' => 'nullable|array',
+            'img_url' => 'nullable|string',
+        ]);
+
+        $base_product_code = $data['product_code'];
+
+        if ($base_product_code) {
+            // validate base product code
+            if (DB::table('products')
+                ->where('store_id', $store->id)
+                ->where('product_code', $base_product_code)
+                ->exists()
+            ) {
+                return response([
+                    'message' => 'Mã sản phẩm đã được sử dụng',
+                    'status' => 'error'
+                ], 400);
+            }
+        } else {
+            // generate base product code by default
+            $last_id = count($store->products);
+            $base_product_code = 'SP' . sprintf('%04d', $last_id);
+        }
+
+        $errorMessage = [];
+        // return response()->json(['data'=>$data['variations']]);
+        
+        foreach ($data['variations'] as $key => $product) {
+            // validate product bar_code
+            $product = json_decode($product, true);
+            if ($product['bar_code']) {
+                if (DB::table('products')
+                    ->where('store_id', $store->id)
+                    ->where('bar_code', $product['bar_code'])
+                    ->exists()
+                ) {
+                    array_push($errorMessage, 'Mã vạch ' . $product['bar_code'] . ' đã được sử dụng');
+                }
+            }
+            if ($product['product_code']) {
+                if (DB::table('products')
+                    ->where('store_id', $store->id)
+                    ->where('bar_code', $product['product_code'])
+                    ->exists()
+                ) {
+                    array_push($errorMessage, 'Mã sản phẩm ' . $product['product_code'] . ' đã được sử dụng');
+                }
+            }
+        }
+
+        if (count($errorMessage)) {
+            return response([
+                'message' => $errorMessage,
+                'status' => 'error',
+            ]);
+        }
+
+
+        ////////////////////// add products /////////////////////
+
+        $product_uuids = [];
+        $category = Category::where('uuid', $data['category_uuid'])->first();
+        $parentProduct =  Product::create([
             'store_id' => $store->id,
-            'uuid' => $product_uuid,
+            'uuid' => (string) Str::uuid(),
             'category_id' => $category->id,
             'name' => $data['name'],
             'list_price' => $data['list_price'],
-            'standard_price' => $data['standard_price'],
-            'bar_code' => $barcode,
+            'standard_price' =>  $data['standard_price'],
             'quantity_per_unit' => array_key_exists('quantity_per_unit', $data) ? $data['quantity_per_unit'] : "cái",
             'min_reorder_quantity' => array_key_exists('min_reorder_quantity', $data) ? $data['min_reorder_quantity'] : 100,
             'description' => array_key_exists('description', $data) ? $data['description'] : "",
             'quantity_available' => '0',
-            'has_variance' => false,
+            'has_variance' => true,
             'on_sale' => false,
+            'product_code' => $base_product_code,
         ]);
 
-        // add new product to each branch inventory
-        foreach ($store->branches as $branch) {
-            BranchInventory::create([
+        foreach ($data['variations'] as $key => $product) {
+            $product = json_decode($product, true);
+            $product_uuid = (string) Str::uuid();
+            array_push($product_uuids, $product_uuid);
+
+            $newProduct =  Product::create([
                 'store_id' => $store->id,
-                'branch_id' => $branch->id,
-                'product_id' => $newProduct->id,
-                'quantity_available' => 0,
+                'uuid' => $product_uuid,
+                'category_id' => $category->id,
+                'name' => $data['name'] . '-' . $product['name'],
+                'list_price' => $product['list_price'] ? $product['list_price'] : $data['list_price'],
+                'standard_price' => $product['standard_price'] ? $product['standard_price'] : $data['standard_price'],
+                'bar_code' => $product['bar_code'],
+                'quantity_per_unit' => array_key_exists('quantity_per_unit', $data) ? $data['quantity_per_unit'] : "cái",
+                'min_reorder_quantity' => array_key_exists('min_reorder_quantity', $data) ? $data['min_reorder_quantity'] : 100,
+                'description' => array_key_exists('description', $data) ? $data['description'] : "",
+                'quantity_available' => '0',
+                'has_variance' => false,
+                'on_sale' => false,
+                'parent_product_code' => $base_product_code,
+                'product_code' => $product['product_code'] ? $product['product_code'] : $base_product_code . '-' . ($key + 1),
             ]);
+
+            // add new product to each branch inventory
+            foreach ($store->branches as $branch) {
+                BranchInventory::create([
+                    'store_id' => $store->id,
+                    'branch_id' => $branch->id,
+                    'product_id' => $newProduct->id,
+                    'quantity_available' => 0,
+                ]);
+            }
         }
 
+       
+
+        if (array_key_exists('images', $data)) {
+            if ($data['images'] != null) {
+                foreach ($data['images'] as $image) {
+                    $imagePath = $image->store('product-images', 'public');
+
+                    $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
+                    $sized_image->save();
+                    $imageUrl = 'http://103.163.118.100/bkrm-api/storage/app/public/'
+                        . $imagePath;
+
+                    foreach ($product_uuids as $product_uuid) {
+                        DB::table('images')->insert([
+                            'uuid' => (string) Str::uuid(),
+                            'url' => $imageUrl,
+                            'store_id' => $store->id,
+                            'entity_uuid' => $product_uuid,
+                            'image_type' => 'product'
+                        ]);
+                    }
+                }
+            } else {
+                foreach ($product_uuids as $product_uuid) {
+                    DB::table('images')->insert([
+                        'uuid' => (string) Str::uuid(),
+                        'url' => 'http://103.163.118.100/bkrm-api/storage/app/public/product-images/product-default.png',
+                        'store_id' => $store->id,
+                        'entity_uuid' => $product_uuid,
+                        'image_type' => 'product'
+                    ]);
+                }
+            }
+        } else {
+            foreach ($product_uuids as $product_uuid) {
+                DB::table('images')->insert([
+                    'uuid' => (string) Str::uuid(),
+                    'url' => 'http://103.163.118.100/bkrm-api/storage/app/public/product-images/product-default.png',
+                    'store_id' => $store->id,
+                    'entity_uuid' => $product_uuid,
+                    'image_type' => 'product'
+                ]);
+            }
+        }
+
+
         return response()->json([
-            'message' => "Product created successfully",
-            'data' => $newProduct,
-            'product_images' => $imageUrls,
+            'message' => "Product created successfully"
         ], 200);
     }
 
@@ -283,10 +428,32 @@ class ProductController extends Controller
         $images = DB::table('images')->where('entity_uuid', $product['uuid'])->get('url');
         $suppliers = $product->suppliers->get('name');
 
+        $variations = $store->products()->where('parent_product_code', $product->product_code)->get()->toArray();
+
+        $variationsData = [];
+        foreach ($variations as $variation) {
+            $firstImageUrl = DB::table('images')->where('entity_uuid', $variation['uuid'])->get('url')->first();
+            $category = $store->categories->where('id', $variation['category_id'])->first();
+            unset($product['category_id']);
+
+            // get branch inventory of that product
+            $branch_uuid = $request->query('branch_uuid');
+            $branch_id = Branch::where('uuid', $branch_uuid)->first()->id;
+            $branch_product = BranchInventory::where('branch_id', $branch_id)->where('product_id', $variation['id'])->first();
+
+            array_push($variationsData, array_merge($variation, [
+                'img_url' => $firstImageUrl ? $firstImageUrl->url : "http://103.163.118.100/bkrm-api/storage/app/public/product-images/product-default.png",
+                'category' => $category,
+                'branch_quantity' => $branch_product->quantity_available,
+            ]));
+        }
+
+
         $data = array_merge($product->toArray(), [
             'category' => $category,
             'images' => $images,
             'suppliers' => $suppliers,
+            'variations' => $variationsData,
         ]);
 
         return response()->json([
@@ -401,48 +568,6 @@ class ProductController extends Controller
         ], 200);
     }
 
-    public function suppliers(Store $store, Product $product)
-    {
-        $product_supplier = ProductSupplier::where('product_id', $product->id)->get();
-
-        return response()->json([
-            'data' => $product_supplier
-        ], 200);
-    }
-
-    public function addSupplier(Request $request, Store $store, Product $product)
-    {
-        $validated = $request->validate([
-            'supplier_uuid' => 'required|string'
-        ]);
-
-        $supplier_id = Supplier::where('uuid', $validated['supplier_uuid'])->first()->id;
-
-        $product_supplier = ProductSupplier::create([
-            'supplier_id' => $supplier_id,
-            'product_id' => $product->id,
-            'store_id' => $store->id,
-        ]);
-
-        return response()->json([
-            'data' => $product_supplier
-        ], 200);
-    }
-
-    public function deleteSupplier(Request $request, Store $store, Product $product, Supplier $supplier)
-    {
-        $product_supplier = ProductSupplier::where('product_id', $product->id)
-            ->where('suplier_id', $supplier->id);
-
-        $isDeleted = ProductSupplier::destroy($product_supplier->id);
-
-        return response()->json([
-            'message' => $isDeleted,
-            'data' => $product_supplier
-        ], 200);
-    }
-
-
     public function searchDefaultProduct(Request $request)
     {
         // $name = $request->query('name');
@@ -489,6 +614,7 @@ class ProductController extends Controller
             'data' => $data,
         ], 200);
     }
+
 
     public function addProductByJson(Request $request, Store $store)
     {
@@ -638,4 +764,49 @@ class ProductController extends Controller
             ], 200);
         }
     }
+
+
+
+
+
+
+
+    // public function index(Request $request, Store $store)
+    // {
+    //     $search_key = $request->query("searchKey");
+
+    //     $products = [];
+
+    //     if ($search_key) {
+    //         $products = $store->products()->where('name', 'LIKE', '%' . $search_key . '%')
+    //             ->orWhere('bar_code', 'LIKE', '%' . $search_key . '%')
+    //             ->where('status', '<>', 'inactive')
+    //             ->where('status', '<>', 'deleted')
+    //             ->limit(10)
+    //             ->get()->toArray();
+    //     } else {
+    //         $products = $store
+    //             ->products()
+    //             ->where('status', '<>', 'deleted')
+    //             ->limit(10)
+    //             ->get()->toArray();
+    //     }
+
+    //     $data = [];
+
+    //     foreach ($products as $product) {
+    //         $firstImageUrl = DB::table('images')->where('entity_uuid', $product['uuid'])->get('url')->first();
+    //         $category = $store->categories->where('id', $product['category_id'])->first();
+    //         unset($product['category_id']);
+    //         array_push($data, array_merge($product, [
+    //             'img_url' => $firstImageUrl->url,
+    //             'category' => $category,
+    //         ]));
+    //     }
+
+    //     return response()->json([
+    //         'data' => $data,
+    //     ], 200);
+    // }
+
 }

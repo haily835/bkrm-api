@@ -23,7 +23,9 @@ use App\Http\Controllers\BarcodeController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\AddressController;
+use App\Http\Controllers\CustomerPageController;
 use App\Http\Controllers\InventoryCheckController;
+use App\Http\Controllers\PromotionVoucherController;
 use App\Http\Controllers\ScheduleController;
 use App\Http\Controllers\StoreReportController;
 use Intervention\Image\Facades\Image;
@@ -50,6 +52,11 @@ Route::get('/address/provinces/{province}/districts', [AddressController::class,
 Route::get('/address/provinces/{province}/districts/{district}/wards', [AddressController::class, 'getWards']);
 
 Route::get('/searchDefaultProduct', [ProductController::class, 'searchDefaultProduct']);
+Route::get('/stores/{store:uuid}/getActivePromotionVoucher', [PromotionVoucherController::class, 'getActivePromotionVoucher']);
+
+// Public routes for customer page
+Route::get('/storeInfo', [CustomerPageController::class, 'storeInfo']);
+Route::get('/storeInfo/{store:uuid}/products', [CustomerPageController::class, 'storeProducts']);
 
 // Protected routes
 Route::group(['middleware' => ['auth:user,employee']], function () {
@@ -74,6 +81,14 @@ Route::group(['middleware' => ['auth:user,employee']], function () {
     Route::post('/stores/{store:uuid}/branches/{branch:uuid}/checkAttendance', [ScheduleController::class, 'checkAttendance']);
     Route::get('/stores/{store:uuid}/branches/{branch:uuid}/getEmpAndShiftOfBranch', [ScheduleController::class, 'getEmpAndShiftOfBranch']);
 
+    // routes for promotion and voucher
+    Route::get('/stores/{store:uuid}/getAllPromotions', [PromotionVoucherController::class, 'getAllPromotions']);
+    Route::get('/stores/{store:uuid}/getAllVouchers', [PromotionVoucherController::class, 'getAllVouchers']);
+    Route::post('/stores/{store:uuid}/createPromotion', [PromotionVoucherController::class, 'createPromotion']);
+    Route::post('/stores/{store:uuid}/createVoucher', [PromotionVoucherController::class, 'createVoucher']);
+    Route::post('/stores/{store:uuid}/promotions/{promotion:id}/updatePromotion', [PromotionVoucherController::class, 'createPromotion']);
+    Route::post('/stores/{store:uuid}/vouchers/{voucher:id}/updateVoucher', [PromotionVoucherController::class, 'createVoucher']);
+
     Route::get('/stores/{store:uuid}/employees', [EmployeeController::class, 'index']);
     Route::post('/stores/{store:uuid}/employees', [EmployeeController::class, 'store']);
     Route::get('/stores/{store:uuid}/employees/{employee:uuid}', [EmployeeController::class, 'show']);
@@ -91,8 +106,9 @@ Route::group(['middleware' => ['auth:user,employee']], function () {
     Route::post('/stores/{store:uuid}/products/{product:uuid}/suppliers', [ProductController::class, 'addSupplier']);
     Route::delete('/stores/{store:uuid}/products/{product:uuid}/suppliers/{supplier}', [ProductController::class, 'deleteSupplier']);
 
-    Route::get('/stores/{store:uuid}/products', [ProductController::class, 'index']);
+    // Route::get('/stores/{store:uuid}/products', [ProductController::class, 'index']);
     Route::post('/stores/{store:uuid}/products/addProductByJson', [ProductController::class, 'addProductByJson']);
+    Route::post('/stores/{store:uuid}/products/addProductWithVariation', [ProductController::class, 'addProductWithVariation']);
     Route::get('/stores/{store:uuid}/branches/{branch:uuid}/products', [ProductController::class, 'indexOfBranch']);
     Route::get('/stores/{store:uuid}/search-products', [ProductController::class, 'search']);
     Route::get('/stores/{store:uuid}/branches/{branch:uuid}/search-products', [ProductController::class, 'searchBranchInventory']);
@@ -166,6 +182,7 @@ Route::group(['middleware' => ['auth:user,employee']], function () {
     Route::delete('/stores/{store:uuid}/customers/{customer:uuid}', [CustomerController::class, 'destroy']);
 
     Route::get('/stores/{store:uuid}/categories', [CategoryController::class, 'index']);
+    Route::get('/stores/{store:uuid}/categories/getNestedCategory', [CategoryController::class, 'getNestedCategory']);
     Route::get('/stores/{store:uuid}/categories/parent', [CategoryController::class, 'getParentCategory']);
     Route::post('/stores/{store:uuid}/categories', [CategoryController::class, 'store']);
     Route::get('/stores/{store:uuid}/categories/{category:uuid}', [CategoryController::class, 'show']);
