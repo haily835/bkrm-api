@@ -5,17 +5,38 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Store;
 use App\Models\Employee;
-use Spatie\Permission\Models\Permission;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Intervention\Image\Facades\Image;
+use Illuminate\Support\Facades\Auth;
 
 class EmployeeController extends Controller
 {
-    public function index(Store $store)
+    public function index(Request $request, Store $store)
     {
+        $limit = $request->query('limit');
+        $page = $request->query('page');
+
+        $search_key = $request->query('searchKey');
+
+        $db_query = $store->employees()
+            ->where('status', '<>', 'deleted')
+            ->orderBy('created_at', 'desc');
+
+        if ($search_key) {
+            $db_query = $db_query->where(function ($query) use ($search_key) {
+                $query->where('name', 'like', '%' . $search_key . '%')
+                    ->orWhere('employee_code', 'like',  '%' . $search_key . '%')
+                    ->orWhere('user_name', 'like', '%' . $search_key . '%')
+                    ->orWhere('phone', 'like', '%' . $search_key . '%')
+                    ->orWhere('email', 'like', '%' . $search_key . '%');
+            });
+        }
+        $total_rows = $db_query->count();
+        $employees = $db_query->offset($limit * $page)->limit($limit)->get();
         return response()->json([
-            'data' => $store->employees()->where('status', '<>', 'deleted')->get()
+            'data' => $employees,
+            'total_rows' => $total_rows,
         ], 200);
     }
 
@@ -30,9 +51,7 @@ class EmployeeController extends Controller
         $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
         $sized_image->save();
 
-
         /// to do delete old image
-
         $employee->update(['img_url' => $imagePath]);
 
         return response()->json([
@@ -45,7 +64,8 @@ class EmployeeController extends Controller
         $fields = $request->validate([
             'name' => 'required|string',
             'password' => 'required|string|confirmed',
-            'phone' => 'required|string|unique:employees',
+            'user_name' => 'required|string|unique:employees,user_name',
+            'phone' => 'nullable|string',
             'email' => 'nullable|string',
             'date_of_birth' => 'nullable|date_format:Y-m-d',
             'status' => 'nullable|in:active,inactive',
@@ -69,9 +89,13 @@ class EmployeeController extends Controller
             }
         }
 
+        $last_id = count($store->employees);
+        $employee_code = 'NV' . sprintf('%04d', $last_id + 1);
+
         $employee = [
             'name' => $fields['name'],
-            'email' => $fields['email'],
+            'user_name' => $fields['user_name'],
+            'email' =>  $fields['email'] ?  $fields['email'] : null,
             'password' => bcrypt($fields['password']),
             'phone' => $fields['phone'],
             'uuid' => (string) Str::uuid(),
@@ -83,6 +107,7 @@ class EmployeeController extends Controller
             'salary_type' => $fields['salary_type'],
             'address' => $fields['address'],
             'store_id' => $store->id,
+            'employee_code' => $employee_code,
             'img_url' => $imagePath ? $imagePath : 'http://103.163.118.100/bkrm-api/storage/app/public/employee-images/employee-default.png',
         ];
 
@@ -119,9 +144,10 @@ class EmployeeController extends Controller
             'gender' => 'nullable|in:male,female',
             'permissions' => 'nullable|array',
             'branches' => 'nullable|array',
-            'image' => 'nullable'
+            'image' => 'nullable',
+            'status' => "nullable|string",
+            'password' => 'nullable|string',
         ]);
-
 
         // delete all old permissions and branches
         DB::table('employee_priviledge')
@@ -131,20 +157,30 @@ class EmployeeController extends Controller
             ->where('employee_id', $employee->id)
             ->delete();
 
-        foreach ($fields['branches'] as $branch) {
-            DB::table('employee_work_branch')->insert(
-                ['employee_id' => $employee->id, 'branch_id' => $branch]
-            );
+        if (array_key_exists('branches', $fields)) {
+            foreach ($fields['branches'] as $branch) {
+                DB::table('employee_work_branch')->insert(
+                    ['employee_id' => $employee->id, 'branch_id' => $branch]
+                );
+            }
         }
 
-        foreach ($fields['permissions'] as $permission) {
-            DB::table('employee_priviledge')->insert(
-                ['employee_id' => $employee->id, 'priviledge_id' => $permission]
-            );
+        if (array_key_exists('password', $fields)) {
+            if ($fields['password']) {
+                $employee->update(['password' => bcrypt($fields['password'])]);
+            }
+            unset($fields['password']);
         }
 
+        if (array_key_exists('permissions', $fields)) {
+            foreach ($fields['permissions'] as $permission) {
+                DB::table('employee_priviledge')->insert(
+                    ['employee_id' => $employee->id, 'priviledge_id' => $permission]
+                );
+            }
+        }
         // change image
-        if ($fields['image']) {
+        if (array_key_exists('image', $fields)) {
             $imagePath = $fields['image']->store('employee-images', 'public');
             $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
             $sized_image->save();
@@ -152,21 +188,39 @@ class EmployeeController extends Controller
             $employee->update(['img_url' => $imagePath]);
         }
 
-        $employee->update([
-            'name' => $fields['name'],
-            'email' => $fields['email'],
-            'phone' => $fields['phone'],
-            'address' => $fields['address'],
-            'salary' => $fields['salary'],
-            'salary_type' => $fields['salary_type'],
-            'date_of_birth' => $fields['date_of_birth'],
-            'gender' => $fields['gender'],
-        ]);
+        unset($fields['permissions']);
+        unset($fields['branches']);
+        unset($fields['image']);
+
+        $employee->update($fields);
 
         return response()->json([
             'message' => 'Employee updated sucessfully',
             'data' => $employee,
         ]);
+    }
+
+    public function updateEmployeePassword(Request $request, Store $store, Employee $employee)
+    {
+        $fields = $request->validate([
+            'owner_password' => 'nullable|string',
+            'employee_password' => 'nullable|string',
+        ]);
+
+        $user = Auth::guard('user')->user();
+        if ($user) {
+            // $owner = Auth::table('users')->where('password', '=', bcrypt($fields['owner_password']))->first();
+            if (!$token = Auth::guard('user')->attempt([
+                'user_name' => $user->user_name,
+                'password' => $fields['owner_password'],
+            ])) {
+                return response()->json(['error' => 'Unauthorized'], 401);
+            }
+            $employee->update(['password' => bcrypt($fields['employee_password'])]);
+            return response()->json(['status' => 1, 'message' => 'Cập nhật mật khẩu thành công']);
+        } else {
+            return response()->json(['error' => 'Permission error'], 401);
+        }
     }
 
     public function destroy(Store $store, Employee $employee)
@@ -182,11 +236,11 @@ class EmployeeController extends Controller
     {
         // $permissions = $employee->getAllPermissions();
         $branches = DB::table('employee_work_branch')
-        ->leftJoin('branches', 'branches.id', '=', 'employee_work_branch.branch_id')
-        ->where('employee_work_branch.employee_id', $employee->id)
-        ->where('branches.status','active')
-        ->select('branches.*')
-        ->get();
+            ->leftJoin('branches', 'branches.id', '=', 'employee_work_branch.branch_id')
+            ->where('employee_work_branch.employee_id', $employee->id)
+            ->where('branches.status', 'active')
+            ->select('branches.*')
+            ->get();
 
         return response()->json([
             'data' => array_merge($employee->toArray(), ['permissions' => $employee->priviledges, 'branches' => $branches])

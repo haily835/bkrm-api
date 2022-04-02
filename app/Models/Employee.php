@@ -25,6 +25,7 @@ class Employee extends Authenticatable implements JWTSubject
         'phone',
         'date_of_birth',
         'status',
+        'user_name',
         'gender',
         'uuid',
         'salary_type',
@@ -32,6 +33,7 @@ class Employee extends Authenticatable implements JWTSubject
         'salary',
         'id_card_num',
         'address',
+        'employee_code'
     ];
 
     /**
@@ -57,15 +59,18 @@ class Employee extends Authenticatable implements JWTSubject
         return $this->belongsTo(Store::class);
     }
 
-    public function getJWTIdentifier() {
+    public function getJWTIdentifier()
+    {
         return $this->getKey();
     }
 
-    public function getJWTCustomClaims() {
+    public function getJWTCustomClaims()
+    {
         return [];
     }
 
-    public function priviledges() {
+    public function priviledges()
+    {
         return $this->belongsToMany(Priviledge::class);
     }
 }

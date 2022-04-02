@@ -17,17 +17,8 @@ class User extends Authenticatable implements JWTSubject
      *
      * @var string[]
      */
-    protected $fillable = [
-        'name',
-        'uuid',
-        'email',
-        'password',
-        'role',
-        'phone',
-        'date_of_birth',
-        'status',
-        'gender',
-    ];
+    use HasFactory;
+    protected $guarded = [];
 
     protected $guard = 'user';
 

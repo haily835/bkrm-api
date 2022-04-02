@@ -12,18 +12,20 @@ use App\Models\Branch;
 use App\Models\Category;
 use App\Models\Customer;
 use App\Models\Supplier;
-use Validator;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
+use Intervention\Image\Facades\Image;
 
 class AuthController extends Controller
 {
     public function ownerRegister(Request $request)
     {
-        $fields = $request->validate([
+        $validator = Validator::make($request->all(), [
             'name' => 'required|string',
-            'email' => 'required|string|unique:users,email',
+            'email' => 'nullable|string',
             'password' => 'required|string|confirmed',
-            'phone' => 'required|unique:users',
+            'user_name' => 'required|string|unique:users,user_name',
+            'phone' => 'nullable|string',
             'date_of_birth' => 'nullable|date_format:Y-m-d',
             'status' => 'nullable|in:active,inactive',
             'gender' => 'nullable|string',
@@ -36,12 +38,21 @@ class AuthController extends Controller
             'default_branch' => 'required|boolean',
             'lng' => 'nullable|string',
             'lat' => 'nullable|string',
-        ]);
+        ], $messages = ['user_name.unique' => 'Username existed']);
 
+        if ($validator->fails()) {
+            return response()->json([
+                'message' => 'error',
+                'data' => $validator->errors()->toArray(),
+            ]);
+        }
+
+        $fields = $validator->validated();
         $user = User::create([
             'uuid' => (string)Str::uuid(),
             'name' => $fields['name'],
-            'email' => $fields['email'],
+            'user_name' => $fields['user_name'],
+            'email' => $fields['email'] === null ? '' : $fields['email'],
             'password' => bcrypt($fields['password']),
             'phone' => $fields['phone'],
             'date_of_birth' => $fields['date_of_birth'] ? $fields['date_of_birth'] : null,
@@ -87,14 +98,16 @@ class AuthController extends Controller
 
         Supplier::create([
             "uuid" => (string) Str::uuid(),
-            "name" => "Nhà cung cấp chung",
+            "name" => "Nhà cung cấp lẻ",
             "store_id" => $store->id,
+            "type" => "default"
         ]);
 
         Customer::create([
             "uuid" => (string) Str::uuid(),
-            "name" => "Khách hàng chung",
+            "name" => "Khách hàng lẻ",
             "store_id" => $store->id,
+            "type" => "default"
         ]);
 
         return response()->json([
@@ -109,7 +122,7 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'phone' => 'required|string',
+            'user_name' => 'required|string',
             'password' => 'required|string',
         ]);
 
@@ -145,6 +158,31 @@ class AuthController extends Controller
         }
     }
 
+    // this is used when user re-enter their password to change their profile
+    public function confirmPassword(Request $request)
+    {
+        $validated = Validator::make($request->all(), [
+            'user_name' => 'required|string',
+            'password' => 'required|string',
+            'role' => 'required|string',
+        ]);
+
+        $validated = $request->validate([
+            'user_name' => 'required|string',
+            'password' => 'required|string',
+            'role' => 'required|string',
+        ]);
+
+        $role = $validated['role'];
+        unset($validated['role']);
+
+        $authenticated = $role === 'employee'
+            ? Auth::guard('employee')->attempt($validated)
+            : Auth::guard('user')->attempt($validated);
+
+        return $authenticated ? response()->json(['message' => 'success'], 200) : response()->json(['message' => 'failure'], 400);
+    }
+
     public function employeeLogin(Request $request)
     {
 
@@ -168,12 +206,14 @@ class AuthController extends Controller
     {
         $user = Auth::guard('user')->user();
         $store = Store::where('user_id', $user->id)->get()[0];
+        $branches = Branch::where('store_id', $store->id)->where('status', 'active')->get();
+
         return response()->json([
             'access_token' => $token,
             'token_type' => 'bearer',
             'expires_in' => auth()->factory()->getTTL() * 60,
             'user' => $user,
-            'store' => $store,
+            'store' => array_merge($store->toArray(), ['branches' => $branches]),
             'role' => 'owner'
         ]);
     }
@@ -181,7 +221,8 @@ class AuthController extends Controller
     protected function createNewEmpToken($token)
     {
         $user = Auth::guard('employee')->user();
-        $store = Store::where('user_id', $user->store_id)->get()[0];
+        $store = Store::where('id', $user->store_id)->get()[0];
+        $branches = Branch::where('store_id', $store->id)->get();
         // return response()->json([
         //     'access_token' => $token,
         //     'store' => $store,
@@ -195,7 +236,7 @@ class AuthController extends Controller
 
         return response()->json([
             'access_token' => $token,
-            'store' => $store,
+            'store' => array_merge($store->toArray(), ['branches' => $branches]),
             'token_type' => 'bearer',
             'expires_in' => auth()->factory()->getTTL() * 60,
             'user' => Auth::guard('employee')->user(),
@@ -208,29 +249,33 @@ class AuthController extends Controller
         return $this->createNewToken(auth()->refresh());
     }
 
-    public function verifyOwnerToken()
+    public function verifyOwnerToken(Request $request)
     {
         if (Auth::guard('user')->user()) {
             $user = Auth::guard('user')->user();
             $store = Store::where('user_id', $user->id)->get()[0];
-
+            $branches = Branch::where('store_id', $store->id)->where('status', 'active')->get();
             return response()->json([
                 'user' => $user,
-                'store' => $store,
+                'store' => array_merge($store->toArray(), ['branches' => $branches]),
                 'role' => 'owner',
+                'data' => $request->header()
             ]);
         } else if (Auth::guard('employee')->user()) {
             $user = Auth::guard('employee')->user();
-            $store = Store::where('user_id', $user->store_id)->get()[0];
+            $store = Store::where('id', $user->store_id)->get()[0];
+            $branches = Branch::where('store_id', $store->id)->where('status', 'active')->get();
             return response()->json([
                 'user' => Auth::guard('employee')->user(),
-                'store' => $store,
+                'store' => array_merge($store->toArray(), ['branches' => $branches]),
                 'role' => 'employee',
                 'permission' => $user->priviledges,
+                'data' => $request->header()
             ]);
         } else {
             return response()->json([
                 'message' => 'Unauthorized',
+                'data' => $request->header()
             ], 401);
         }
     }
@@ -240,5 +285,60 @@ class AuthController extends Controller
         auth()->logout();
 
         return response()->json(['message' => 'User successfully signed out']);
+    }
+
+    public function editProfile(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => 'nullable|string',
+            'email' => 'nullable|string',
+            'password' => 'nullable|string',
+            'phone' => 'nullable|string',
+            'date_of_birth' => 'nullable|date_format:Y-m-d',
+            'status' => 'nullable|in:active,inactive',
+            'gender' => 'nullable|string',
+            'role' => 'required|string',
+            'id_card_number' => 'nullable|string',
+            'address' => 'nullable|string',
+            'image' => 'nullable',
+        ]);
+
+        # get the user send request by token
+        $user_type =  $validated['role'];
+        unset($validated['role']);
+        $user_id = $user_type === 'employee' ? Auth::guard('employee')->user() : Auth::guard('user')->user()->id;
+        // return response()->json(['data' => $user_id]);
+        if (array_key_exists('password', $validated)) {
+            if ($validated['password']) {
+                if ($user_type === 'employee') {
+                    Employee::where('id', $user_id)->update(['password' => bcrypt($validated['password'])]);
+                }
+                if ($user_type === 'owner') {
+                    User::where('id', $user_id)->update(['password' => bcrypt($validated['password'])]);
+                }
+            }
+            unset($validated['password']);
+        }
+
+        if (array_key_exists('image', $validated)) {
+            if ($validated['image'] != "") {
+                $imagePath = $validated['image']->store('store-images', 'public');
+                $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
+                $sized_image->save();
+                $imagePath = 'http://103.163.118.100/bkrm-api/storage/app/public/' . $imagePath;
+            }
+            unset($validated['image']);
+            $validated = array_merge($validated, ['img_url' => $imagePath]);
+        }
+
+
+        if ($user_type === 'employee') {
+            Employee::where('id', $user_id)->update($validated);
+        }
+        if ($user_type === 'owner') {
+            unset($validated['address']);
+            User::where('id', $user_id)->update($validated);
+        }
+        return response()->json(['data' => 'Edit profile successfully']);
     }
 }

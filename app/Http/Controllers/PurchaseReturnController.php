@@ -20,78 +20,93 @@ class PurchaseReturnController extends Controller
     public function index(Request $request, Store $store, Branch $branch)
     {
         // extract query string
+        $limit = $request->query('limit');
+        $page = $request->query('page');
         $start_date = $request->query('startDate');
         $end_date = $request->query('endDate');
         $min_total_amount = $request->query('minTotalAmount');
-        $max_total_amount = $request->query ('maxTotalAmount');
-        $min_discount = $request->query('minDiscount');
-        $max_discount = $request->query('maxDiscount');
+        $max_total_amount = $request->query('maxTotalAmount');
+        // $min_discount = $request->query('minDiscount');
+        // $max_discount = $request->query('maxDiscount');
         $status = $request->query('status');
         $payment_method = $request->query('paymentMethod');
         $purchase_order_code = $request->query('purchaseOrderCode');
         $purchase_return_code = $request->query('purchaseReturnCode');
+        $search_key = $request->query('searchKey');
+        $order_by = $request->query('orderBy');
+        $sort = $request->query('sort');
 
         // set up query
         $queries = [];
 
-        if($purchase_return_code) {
+        if ($purchase_return_code) {
             array_push($queries, ['purchase_returns.purchase_return_code', 'LIKE', $purchase_return_code]);
         }
 
-        if($start_date) {
+        if ($start_date) {
             array_push($queries, ['purchase_returns.creation_date', '>=', $start_date]);
         }
 
-        if($end_date) {
+        if ($end_date) {
             array_push($queries, ['purchase_returns.creation_date', '<=', $end_date]);
         }
 
-        if($min_total_amount) {
+        if ($min_total_amount) {
             array_push($queries, ['purchase_returns.total_amount', '>=', $min_total_amount]);
         }
 
-        if($max_total_amount) {
+        if ($max_total_amount) {
             array_push($queries, ['purchase_returns.total_amount', '<=', $max_total_amount]);
         }
 
-        if($status) {
+        if ($status) {
             array_push($queries, ['purchase_returns.status', '>=', $min_total_amount]);
         }
 
-        if($payment_method) {
+        if ($payment_method) {
             array_push($queries, ['purchase_returns.payment_method', '<=', $payment_method]);
         }
 
-        if($purchase_order_code) {
-            $purchase_order = $store->purchaseOrders()->where('purchase_order_code', $purchase_order_code)->first();
-            if($purchase_order) {
-                array_push($queries, ['purchase_order_id', '=', $purchase_order->id]);
-            }
-        }
-
-        $purchaseReturns = $branch->purchaseReturns()
+        $database_query = $branch->purchaseReturns()
             ->where($queries)
             ->join('suppliers', 'purchase_returns.supplier_id', '=', 'suppliers.id')
             ->join('branches', 'purchase_returns.branch_id', '=', 'branches.id')
-            ->select('purchase_returns.*', 'suppliers.name as supplier_name', 'branches.name as branch_name')->get();
+            ->select('purchase_returns.*', 'suppliers.name as supplier_name', 'branches.name as branch_name');
+
+        if ($search_key) {
+            $purchase_order = $store->purchaseOrders()->where('purchase_order_code', $search_key)->first();
+            if ($purchase_order->id) {
+                $database_query->where(function ($query) use (&$search_key, &$purchase_order) {
+                    $query->where('purchase_returns.purchase_return_code', $search_key)
+                        ->orWhere('suppliers.name', 'like', '%' . $search_key . '%')
+                        ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
+                        ->orWhere('purchase_order_id', '=', $purchase_order->id);
+                });
+            } else {
+                $database_query->where(function ($query) use (&$search_key) {
+                    $query->where('purchase_returns.purchase_return_code', $search_key)
+                        ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
+                        ->orWhere('suppliers.name', 'like', '%' . $search_key . '%');
+                });
+            }
+        }
+
+        $total_rows = $database_query->get()->count();
+
+        $purchaseReturns = $database_query
+            ->orderBy($order_by, $sort)
+            ->offset($limit * $page)
+            ->limit($limit)
+            ->get();
 
         return response()->json([
             'data' => $purchaseReturns,
+            'total_rows' => $total_rows
         ], 200);
     }
 
-    public function getStorePurchaseReturn(Store $store) {
-        $data = $store->purchaseReturns()
-            ->join('suppliers', 'purchase_returns.supplier_id', '=', 'suppliers.id')
-            ->join('branches', 'purchase_returns.branch_id', '=', 'branches.id')
-            ->select('purchase_returns.*', 'suppliers.name as supplier_name', 'branches.name as branch_name')->get();
-                                    
-        return response()->json([
-            'data' => $data,
-        ]);
-    }
-
-    public function removeInventory(Request $request, Store $store, Branch $branch) {
+    public function removeInventory(Request $request, Store $store, Branch $branch)
+    {
         $validated = $request->validate([
             'purchase_order_uuid' => 'required|string',
             'supplier_id' => 'required|numeric',
@@ -106,11 +121,14 @@ class PurchaseReturnController extends Controller
         // get the user of  token
         $created_by = $approved_by = null;
         $created_user_type = '';
+        $user = null;
 
         if (Auth::guard('user')->user()) {
+            $user = Auth::guard('user')->user();
             $created_by = $approved_by = Auth::guard('user')->user()->id;
             $created_user_type = 'owner';
-        } else if (Auth::guard('employee')->user()){
+        } else if (Auth::guard('employee')->user()) {
+            $user = Auth::guard('employee')->user();
             $created_by = $approved_by = Auth::guard('employee')->user()->id;
             $created_user_type = 'employee';
         } else {
@@ -121,12 +139,32 @@ class PurchaseReturnController extends Controller
 
         $creation_date = $approved_date = $validated['export_date'];
 
-        $purchase_order = $store->purchaseOrders()->where('uuid',$validated['purchase_order_uuid'])->first();
+        $purchase_order = $store->purchaseOrders()->where('uuid', $validated['purchase_order_uuid'])->first();
         $purchase_order_id = $purchase_order->id;
 
         $last_id = $store->purchaseReturns()->count();
 
-        $purchaseReturnCode = 'PR' . sprintf( '%06d', $last_id );
+        $purchaseReturnCode = 'PR' . sprintf('%06d', $last_id + 1);
+
+        $messages = [];
+        foreach ($validated['details'] as $detail) {
+            if ($detail['selectedBatches']) {
+                foreach ($detail['selectedBatches'] as $batch) {
+                    $batchInventory = DB::table('product_batches')
+                        ->where('store_id', $store->id)
+                        ->where('branch_id', $branch->id)
+                        ->where('product_id', $detail['product_id'])
+                        ->where('id', $batch['id'])
+                        ->first()->quantity;
+                    if ($batchInventory < $batch['returned_quantity']) {
+                        array_push($messages, $batch['batch_code'] . ' tồn kho hiện tại là: ' . $batchInventory);
+                    }
+                }
+            }
+        }
+        if (count($messages)) {
+            return response()->json(['data' => $messages, 'status' => 0]);
+        }
 
         $purchaseReturn = PurchaseReturn::create([
             'store_id' => $store->id,
@@ -144,6 +182,7 @@ class PurchaseReturnController extends Controller
             'created_user_type' => $created_user_type,
             'purchase_order_id' => $purchase_order_id,
             'status' => $validated['status'],
+            'created_user_name' => $user->name,
         ]);
 
         foreach ($validated['details'] as $detail) {
@@ -156,6 +195,18 @@ class PurchaseReturnController extends Controller
                 'transaction_type' => 'supplier_returned',
             ]);
 
+
+            if ($detail['selectedBatches']) {
+                foreach ($detail['selectedBatches'] as $batch) {
+                    DB::table('product_batches')
+                        ->where('store_id', $store->id)
+                        ->where('branch_id', $branch->id)
+                        ->where('product_id', $detail['product_id'])
+                        ->where('id', $batch['id'])
+                        ->decrement('quantity', $batch['returned_quantity']);
+                }
+            }
+
             PurchaseReturnDetail::create([
                 'store_id' => $store->id,
                 'branch_id' => $branch->id,
@@ -164,22 +215,25 @@ class PurchaseReturnController extends Controller
                 'purchase_return_id' => $purchaseReturn->id,
                 'removed_from_inventory' => true,
                 'unit_price' => $detail['unit_price'],
-                'quantity' => $detail['quantity']
+                'quantity' => $detail['quantity'],
+                'batches' => $detail['selectedBatches'] ? json_encode($detail['selectedBatches']) : '',
             ]);
 
             $purchase_order->purchaseOrderDetails()->where('product_id', $detail['product_id'])
                 ->increment('returned_quantity', $detail['quantity']);
-            
+
             $product = $store->products->where('id', '=', $detail['product_id'])->first();
             $newQuantity = (string)((int) $product->quantity_available) - ((int) $detail['quantity']);
             $product->update(['quantity_available' => $newQuantity]);
-            
+
             DB::table('purchase_order_details')
                 ->where('id', '=', $detail['purchase_order_detail_id'])
-                ->update(['returned_quantity' => $detail['quantity']]);
+                ->update(['batches' => $detail['purchase_order_batches']]);
+
 
             $productOfStore = BranchInventory::where([
-                ['branch_id', '=', $branch->id], ['product_id', '=', $detail['product_id']]])->first();
+                ['branch_id', '=', $branch->id], ['product_id', '=', $detail['product_id']]
+            ])->first();
 
             if ($productOfStore) {
                 BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $detail['product_id']]])
@@ -211,7 +265,7 @@ class PurchaseReturnController extends Controller
             'return_amount' => 'nullable|numeric',
             'notes' => 'nullable|text',
         ]);
-        
+
         $purchaseReturn = PurchaseReturn::create(array_merge(
             [
                 'store_id' => $store->id,
@@ -227,10 +281,11 @@ class PurchaseReturnController extends Controller
         ], 200);
     }
 
-    public function show(Store $store, Branch $branch, PurchaseReturn $purchaseReturn) {
+    public function show(Store $store, Branch $branch, PurchaseReturn $purchaseReturn)
+    {
         $details = $purchaseReturn->purchaseReturnDetails()
-        ->join('products', 'purchase_return_details.product_id', '=', 'products.id')
-        ->select('purchase_return_details.*', 'products.name', 'products.bar_code')->get();
+            ->join('products', 'purchase_return_details.product_id', '=', 'products.id')
+            ->select('purchase_return_details.*', 'products.name', 'products.bar_code', 'products.product_code')->get();
 
         if ($purchaseReturn->created_user_type === 'owner') {
             $created_by = User::where('id', $purchaseReturn->created_by)->first();
@@ -242,14 +297,14 @@ class PurchaseReturnController extends Controller
             'branch' => $purchaseReturn->branch,
             'details' => $details,
             'created_by_user' => $created_by,
-            'purchase_order'=> $purchaseReturn->purchaseOrder
+            'purchase_order' => $purchaseReturn->purchaseOrder
         ], $purchaseReturn->toArray());
 
         return response()->json([
             'data' => $data
         ], 200);
     }
-    
+
     public function update(Request $request, Store $store, Branch $branch, PurchaseReturn $purchaseReturn)
     {
         $validated = $request->validate([

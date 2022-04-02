@@ -11,12 +11,47 @@ use Intervention\Image\Facades\Image;
 class SupplierController extends Controller
 {
 
-    public function index(Store $store)
+    public function index(Request $request, Store $store)
     {
+        $search_key = $request->query('searchKey');
+        $limit = $request->query('limit');
+        $page = $request->query('page');
+
+        $db_query =$store->suppliers()
+        ->where('type', '<>', 'default')
+        ->where('status', '<>', 'deleted')
+        ->orderBy('created_at', 'desc');
+
+
+        if ($search_key) {
+            $db_query = $db_query->where(function ($query) use($search_key) {
+                $query->where('name', 'like', '%' . $search_key . '%')
+                    ->orWhere('supplier_code', 'like', '%' . $search_key . '%' )
+                    ->orWhere('phone', 'like', '%' . $search_key . '%')
+                    ->orWhere('email', 'like', '%' . $search_key . '%');
+            });
+        }
+
+        $total_rows = $db_query->count();
+
+        if ($limit) {
+            $suppliers = $db_query->offset($limit*$page)->limit($limit)->get();
+        } else {
+            $suppliers = $db_query->get();
+        }
+        $data = [];
+        foreach($suppliers as $supplier) {
+            $total_payment = $store->purchaseOrders()->where('supplier_id', '=', $supplier->id)->sum('total_amount');
+            $total_paid = $store->purchaseOrders()->where('supplier_id', '=', $supplier->id)->sum('paid_amount');
+            $total_discount = $store->purchaseOrders()->where('supplier_id', '=', $supplier->id)->sum('discount');
+            $debt = $total_payment - $total_paid - $total_discount;
+    
+            array_push($data, array_merge($supplier->toArray(), ['total_payment' => $total_payment,'debt' => $debt]));
+        }
+
         return response()->json([
-            'data' => $store->suppliers()
-                ->where('status', '<>', 'deleted')
-                ->get(),
+            'data' => $data,
+            'total_rows' => $total_rows,
         ], 200);
     }
 
@@ -54,6 +89,9 @@ class SupplierController extends Controller
             $imagePath = 'http://103.163.118.100/bkrm-api/storage/app/public/supplier-images/supplier-default.png';
         }
 
+        $last_id = count($store->suppliers);
+        $supplier_code = 'NCC' . sprintf('%06d', $last_id + 1);
+
         $supplier = Supplier::create(
             [
                 'store_id' => $store->id,
@@ -69,6 +107,7 @@ class SupplierController extends Controller
                 'province' => array_key_exists('province', $validated) ? $validated['province'] : "",
                 'payment_info' => array_key_exists('payment_info', $validated) ? $validated['payment_info'] : "",
                 'company' => array_key_exists('company', $validated) ? $validated['company'] : "",
+                'supplier_code' => $supplier_code,
             ],
         );
 

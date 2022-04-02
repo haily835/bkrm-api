@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\StoreEmail;
 use App\Models\Store;
 use App\Models\Employee;
 use App\Models\User;
+use App\Models\Branch;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Intervention\Image\Facades\Image;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Auth;
 use DateTime;
 
@@ -71,41 +74,84 @@ class StoreController extends Controller
             'province' => 'nullable|string',
             'phone' => 'nullable|string',
             'status' => 'nullable|string|in:active,inactive',
-            'image' => 'nullable|image',
+            'email_configuration' => 'nullable|string',
+            'web_configuration' => 'nullable|string',
+            'general_configuration' => 'nullable|string',
+            'images' => 'nullable'
+        ]);
+        return response()->json([
+            'message' => 'Store updated successfully',
+
+            'data' => $data,
+        ], 200);
+        if (array_key_exists('web_configuration', $data)) {
+            if ($data['web_configuration']) {
+                $config = json_decode($data['web_configuration'], true);
+                $web_page = $config['webAddress'];
+                $store->update(['web_page' => $web_page]);
+            }
+        }
+        $banners = [];
+        if (array_key_exists('images', $data)) {
+            if ($data['images'] != null) {
+                foreach ($data['images'] as $image) {
+                    $imagePath = $image->store('store-images', 'public');
+                    $imageUrl = 'http://103.163.118.100/bkrm-api/storage/app/public/'
+                        . $imagePath;
+                    array_push($banners, $imageUrl);
+                }
+            }
+            unset($data['images']);
+            $data = array_merge($data, ['banners' => $banners]);
+        }
+        $store->update($data);
+        return response()->json([
+            'message' => 'Store updated successfully',
+            'store' => $store,
+            'data' => $banners,
+        ], 200);
+    }
+
+    public function updateStoreConfiguration(Request $request, Store $store)
+    {
+        $data = $request->validate([
+            'facebook' => 'nullable|string',
+            'instagram' => 'nullable|string',
+            'image' => 'nullable',
+            'custom_web' => 'nullable|string',
         ]);
 
-        if ($request['image']) {
-            $imagePath = $request['image']->store('store-images', 'public');
-
-            $image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
-            $image->save();
-
-            $data['image'] = $imagePath;
-        } else {
-            $data['image'] = 'storage/store-images/store-default.png';
+        $imagePath = "";
+        if (array_key_exists('image', $data)) {
+            if ($data['image'] != "") {
+                $imagePath = $data['image']->store('store-images', 'public');
+                $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
+                $sized_image->save();
+                $imagePath = 'http://103.163.118.100/bkrm-api/storage/app/public/' . $imagePath;
+            }
         }
 
-        $store->update($data);
+        unset($data['image']);
+        $store_configuration = array_merge($data, ['img_url' => $imagePath]);
+        $store->update(['store_configuration' => json_encode($store_configuration)]);
         return response()->json([
             'message' => 'Store updated successfully',
             'store' => $store,
         ], 200);
     }
 
-    public function destroy(Store $store)
+    public function show(Store $store)
     {
-        $isdeleted = Store::destroy($store->id);
         return response()->json([
-            'message' => $isdeleted,
             'data' => $store
         ], 200);
     }
 
-    public function activities(Request $request, Store $store)
+    public function activities(Request $request, Store $store, Branch $branch)
     {
         $period = $request->query('period');
         $data = [];
-        $purchaseOrders = $store->purchaseOrders()
+        $purchaseOrders = $branch->purchaseOrders()
             ->where('creation_date', '>', now()->subDays($period)->endOfDay())
             ->join('suppliers', 'purchase_orders.supplier_id', '=', 'suppliers.id')
             ->join('branches', 'purchase_orders.branch_id', '=', 'branches.id')
@@ -126,7 +172,7 @@ class StoreController extends Controller
             ], $purchaseOrder);
         }, $purchaseOrders);
 
-        $purchaseReturns = $store->purchaseReturns()
+        $purchaseReturns = $branch->purchaseReturns()
             ->where('creation_date', '>', now()->subDays($period)->endOfDay())
             ->join('suppliers', 'purchase_returns.supplier_id', '=', 'suppliers.id')
             ->join('branches', 'purchase_returns.branch_id', '=', 'branches.id')
@@ -147,7 +193,7 @@ class StoreController extends Controller
             ], $purchaseReturn);
         }, $purchaseReturns);
 
-        $orders = $store->orders()
+        $orders = $branch->orders()
             ->where('orders.created_at', '>', now()->subDays($period)->endOfDay())
             ->join('customers', 'orders.customer_id', '=', 'customers.id')
             ->join('branches', 'orders.branch_id', '=', 'branches.id')
@@ -168,9 +214,8 @@ class StoreController extends Controller
             ], $order);
         }, $orders);
 
-        $refunds = $store->refunds()
+        $refunds = $branch->refunds()
             ->where('refunds.created_at', '>', now()->subDays($period)->endOfDay())
-            ->limit(20)
             ->join('customers', 'refunds.customer_id', '=', 'customers.id')
             ->join('branches', 'refunds.branch_id', '=', 'branches.id')
             ->select(
@@ -190,7 +235,24 @@ class StoreController extends Controller
             ], $refund);
         }, $refunds);
 
-        $documents = array_merge($purchaseOrders, $purchaseReturns, $orders, $refunds);
+        $inventoryChecks = $branch->inventoryChecks()
+            ->where('inventory_checks.created_at', '>', now()->subDays($period)->endOfDay())
+            ->select(
+                'inventory_checks.inventory_check_code as code',
+                'inventory_checks.total_amount as total_amount',
+                'inventory_checks.created_at as created_at',
+                'inventory_checks.created_user_type as user_type',
+                'inventory_checks.created_by as user_id',
+            )
+            ->get()->toArray();
+
+        $inventoryChecks = array_map(function ($inventoryCheck) {
+            return array_merge([
+                'type' => 'inventory_check'
+            ], $inventoryCheck);
+        }, $inventoryChecks);
+
+        $documents = array_merge($purchaseOrders, $purchaseReturns, $orders, $refunds, $inventoryChecks);
 
         foreach ($documents as $document) {
             if ($document["user_type"] === 'owner') {
@@ -220,98 +282,27 @@ class StoreController extends Controller
         ], 200);
     }
 
-    // public function report(Request $request, Store $store) {
-    //     $numOfProducts = $store->products()->where('status', '<>', 'deleted')->count();
-    //     $numOfEmployees = $store->employees()->where('status', 'active')->count();
-    //     $numOfCustomers = $store->customers()->where('status', 'active')->count();
-    //     $numOfBranches = $store->branches()->where('status', 'active')->count();
-
-    //     $start_date = $request->query('start_date') ? 
-    //                 $request->query('start_date') . ' 00:00:00' 
-    //                 : "";
-
-    //     $end_date = $request->query('end_date') ?
-    //                 $request->query('start_date') . ' 11:59:59'
-    //                 : "";
-
-    //     $purchaseOrders = $store->purchaseOrders()
-    //         ->where('creation_date', '>=', $start_date)
-    //         ->where('creation_date', '<', $end_date)->get();
-
-    //     $orders = $store->orders()
-    //         ->where('creation_date', '<', $end_date)->get();
-
-
-    //     $purchaseReturns = $store->purchaseReturns()->where('creation_date', '>', now()->subDays($period)->endOfDay());
-
-    //     $refunds = $store->refunds()->where('created_at', '>', now()->subDays($period)->endOfDay());
-
-    //     $outAccount = $purchaseOrders->sum('total_amount') + $refunds->sum('total_amount');
-    //     $inAccount = $orders->sum('total_amount') + $purchaseReturns->sum('total_amount');
-
-    //     // sales per product
-    //     $products = $store->products;
-
-    //     $productData = [];
-    //     foreach($products as $product) {
-    //         $result = $product->orderDetails()
-    //             ->where('created_at', '>', now()->subDays($period)->endOfDay())
-    //             ->select(DB::raw('sum(quantity * unit_price) as result' ))->first();
-    //         array_push($productData, ['product_name' => $product->name, 'totalSales' => $result['result']]);
-    //     }
-
-    //     // customer total sales
-    //     // $customer_sales = $orders->groupBy('customer_id')->count();
-
-    //     $customer_sales = 
-    //             DB::table('orders')->where('orders.store_id', $store->id)
-    //             ->join('customers', 'orders.customer_id', '=', 'customers.id')
-    //             ->selectRaw('count(orders.id) as number_of_orders, sum(total_amount) as total_sale, customers.name, customers.id')
-    //             ->groupBy('customer_id')
-    //             ->get();
-
-    //     $employee_sales = 
-    //             DB::table('orders')
-    //             ->where('orders.store_id', $store->id)
-    //             ->where('orders.created_user_type', 'employee')
-    //             ->join('employees', 'orders.user_id', '=', 'employees.id')
-    //             ->selectRaw('count(orders.id) as number_of_orders, sum(total_amount) as total_sale, employees.name, employees.id')
-    //             ->groupBy('user_id')
-    //             ->get();
-
-    //     return response()->json([
-    //         'message' => 'get report successfully',
-    //         'data' => [
-    //             'product_report' => $productData,
-    //             'inAccount' => $inAccount,
-    //             'outAccount' => $outAccount,
-    //             'numOfProducts' => $numOfProducts,
-    //             'numOfEmployees' => $numOfEmployees,
-    //             'numOfBranches' => $numOfBranches,
-    //             'numOfCustomers' => $numOfCustomers,
-    //             'customerSales' => $customer_sales,
-    //             'employeeSales' => $employee_sales,
-    //         ]
-    //     ], 200);
-    // }
-
-    // private function getBestSellingCategory($store_id, $begin, $end, $order_by)
-    // {
-    //     $item_list = DB::table('orders')->where('orders.branch_id', $branch_id)
-    //         ->join('order_details', 'order_details.order_id', '=', 'orders.id')
-    //         ->join('products', 'products.id', '=', 'order_details.product_id')
-    //         ->join('categories', 'categories.id', '=', 'products.category_id')
-    //         ->selectRaw('categories.id, categories.name, SUM(order_details.unit_price*order_details.quantity) AS total_sell_price, SUM(order_details.quantity) AS total_quantity')
-    //         ->groupByRaw('categories.id, categories.name')
-    //         ->orderByRaw("categories.id DESC");
-
-    //     if ($begin) {
-    //         $item_list = $item_list->where('orders.created_at', '>=', $begin);
-    //     }
-    //     if ($end) {
-    //         $item_list = $item_list->where('orders.created_at', '<', $end);
-    //     }
-    //     return $item_list->get();
-    // }
-
+    public function sendEmail(Request $request, Store $store)
+    {
+        $email_configuration = json_decode($store->email_configuration, true);
+        if (!is_null($email_configuration)) {
+            $config = array(
+                'driver'     =>     'smtp',
+                'host'       =>     'smtp.gmail.com',
+                'port'       =>     587,
+                'username'   =>     $email_configuration['username'],
+                'password'   =>     $email_configuration['password'],
+                'encryption' =>     'tls',
+                'from'       =>     array('address' => $email_configuration['username'], 'name' => $store->name)
+            );
+            Config::set('mail', $config);
+        }
+        $validated = $request->validate([
+            'subject' => 'required|string',
+            'email' => 'required|string',
+            'name' => 'required|string',
+            'content' => 'required|string'
+        ]);
+        Mail::send(new StoreEmail($validated));
+    }
 }

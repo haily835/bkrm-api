@@ -47,11 +47,14 @@ class RefundController extends Controller
         // get the user of  token
         $created_by = $approved_by = null;
         $created_user_type = '';
+        $user = null;
 
         if (Auth::guard('user')->user()) {
+            $user = Auth::guard('user')->user();
             $created_by = $approved_by = Auth::guard('user')->user()->id;
             $created_user_type = 'owner';
         } else if (Auth::guard('employee')->user()) {
+            $user = Auth::guard('employee')->user();
             $created_by = $approved_by = Auth::guard('employee')->user()->id;
             $created_user_type = 'employee';
         } else {
@@ -65,11 +68,9 @@ class RefundController extends Controller
         $order = $store->orders()->where('uuid', $validated['order_uuid'])->first();
         $order_id = $order->id;
 
-
-
         $last_id = $store->refunds()->count();
 
-        $refundCode = 'TH' . sprintf('%06d', $last_id);
+        $refundCode = 'TH' . sprintf('%06d', $last_id + 1);
 
         $refund = Refund::create([
             'store_id' => $store->id,
@@ -82,11 +83,11 @@ class RefundController extends Controller
             'payment_method' => $validated['payment_method'],
             'total_amount' => $validated['total_amount'],
             'created_user_type' => $created_user_type,
+            'created_user_name' => $user->name,
             'order_id' => $order_id,
             'status' => $validated['status'],
             'created_at' => $validated['import_date']
         ]);
-
 
         foreach ($validated['details'] as $detail) {
             $inventoryTransaction = InventoryTransaction::create([
@@ -97,6 +98,16 @@ class RefundController extends Controller
                 'branch_id' => $branch->id,
                 'transaction_type' => 'supplier_returned',
             ]);
+            if ($detail['selectedBatches']) {
+                foreach ($detail['selectedBatches'] as $batch) {
+                    DB::table('product_batches')
+                        ->where('store_id', $store->id)
+                        ->where('branch_id', $branch->id)
+                        ->where('product_id', $detail['product_id'])
+                        ->where('id', $batch['id'])
+                        ->increment('quantity', $batch['returned_quantity']);
+                }
+            }
 
             RefundDetail::create([
                 'refund_id' => $refund->id,
@@ -107,11 +118,15 @@ class RefundController extends Controller
                 'store_id' => $store->id,
                 'branch_id' => $branch->id,
                 'posted_to_inventory' => true,
+                'batches' => $detail['selectedBatches'] ? json_encode($detail['selectedBatches']) : '',
             ]);
 
             DB::table('order_details')
                 ->where('id', '=', $detail['order_detail_id'])
-                ->update(['returned_quantity' => $detail['quantity']]);
+                ->update([
+                    'returned_quantity' => $detail['quantity'],
+                    'batches' => $detail['order_batches']
+                ]);
 
             $product = $store->products->where('id', '=', $detail['product_id'])->first();
             $newQuantity = (string)((int) $product->quantity_available) + ((int) $detail['quantity']);
@@ -141,6 +156,8 @@ class RefundController extends Controller
 
     public function index(Request $request, Store $store, Branch $branch)
     {
+        $limit = $request->query('limit');
+        $page = $request->query('page');
         // extract query string
         $start_date = $request->query('startDate');
         $end_date = $request->query('endDate');
@@ -148,15 +165,14 @@ class RefundController extends Controller
         $max_total_amount = $request->query('maxTotalAmount');
         $status = $request->query('status');
         $payment_method = $request->query('paymentMethod');
-        $order_code = $request->query('orderCode');
-        $refund_code = $request->query('refundCode');
+        $search_key = $request->query('searchKey');
+
+        $order_by = $request->query('orderBy');
+        $sort = $request->query('sort');
+
 
         // set up query
         $queries = [];
-
-        if ($refund_code) {
-            array_push($queries, ['refunds.refund_code', 'LIKE', $refund_code]);
-        }
 
         if ($start_date) {
             array_push($queries, ['refunds.created_at', '>=', $start_date]);
@@ -176,29 +192,48 @@ class RefundController extends Controller
 
 
         if ($status) {
-            array_push($queries, ['refunds.status', '>=', $min_total_amount]);
+            array_push($queries, ['refunds.status', '==', $status]);
         }
 
         if ($payment_method) {
-            array_push($queries, ['payment_method', '<=', $payment_method]);
+            array_push($queries, ['payment_method', '==', $payment_method]);
         }
 
-        if ($order_code) {
-            $order = $store->orders()->where('order_code', $order_code)->first();
-            if ($order) {
-                array_push($queries, ['order_id', '=', $order->id]);
-            }
-        }
-
-        $refunds = $branch->refunds()
+        $database_query = $branch->refunds()
             ->where($queries)
             ->join('customers', 'refunds.customer_id', '=', 'customers.id')
             ->join('branches', 'refunds.branch_id', '=', 'branches.id')
-            ->select('refunds.*', 'customers.name as customer_name', 'branches.name as branch_name')->get();
+            ->select('refunds.*', 'customers.name as customer_name', 'branches.name as branch_name');
 
+        if ($search_key) {
+            $order = $store->orders()->where('order_code', $search_key)->first();
+            if ($order) {
+                $database_query->where(function ($query) use (&$search_key, &$order) {
+                    $query->where('refunds.refund_code', $search_key)
+                        ->orWhere('customers.name', 'like', '%' . $search_key . '%')
+                        ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
+                        ->orWhere('order_id', '=', $order->id);
+                });
+            } else {
+                $database_query->where(function ($query) use (&$search_key) {
+                    $query->where('refunds.refund_code', $search_key)
+                        ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
+                        ->orWhere('customers.name', 'like', '%' . $search_key . '%');
+                });
+            }
+        }
+
+        $total_rows = $database_query->get()->count();
+
+        $refunds = $database_query
+            ->orderBy($order_by, $sort)
+            ->offset($limit * $page)
+            ->limit($limit)
+            ->get();
 
         return response()->json([
             'data' => $refunds,
+            'total_rows' => $total_rows,
         ], 200);
     }
 
@@ -232,7 +267,6 @@ class RefundController extends Controller
             $validated
         ));
 
-
         return response()->json([
             'message' => 'Refund created',
             'data' => $refund,
@@ -243,7 +277,7 @@ class RefundController extends Controller
     {
         $details = $refund->refundDetails()
             ->join('products', 'refund_details.product_id', '=', 'products.id')
-            ->select('refund_details.*', 'products.name', 'products.bar_code')->get();
+            ->select('refund_details.*', 'products.name', 'products.bar_code', 'products.product_code')->get();
 
         if ($refund->created_user_type === 'owner') {
             $created_by = User::where('id', $refund->created_by)->first();

@@ -13,11 +13,14 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\Employee;
+use Illuminate\Support\Facades\DB;
 
 class PurchaseOrderController extends Controller
 {
     public function index(Request $request, Store $store, Branch $branch)
     {
+        $limit = $request->query('limit');
+        $page = $request->query('page');
         // extract query string
         $start_date = $request->query('startDate');
         $end_date = $request->query('endDate');
@@ -27,14 +30,14 @@ class PurchaseOrderController extends Controller
         $max_discount = $request->query('maxDiscount');
         $status = $request->query('status');
         $payment_method = $request->query('paymentMethod');
-        $purchase_order_code = $request->query('purchase_order_code');
+        $search_key = $request->query('searchKey');
+        $order_by = $request->query('orderBy');
+        $sort = $request->query('sort');
+
 
         // set up query
         $queries = [];
 
-        if ($purchase_order_code) {
-            array_push($queries, ['purchase_orders.purchase_order_code', 'LIKE', $purchase_order_code]);
-        }
 
         if ($start_date) {
             array_push($queries, ['purchase_orders.creation_date', '>=', $start_date]);
@@ -68,23 +71,47 @@ class PurchaseOrderController extends Controller
             array_push($queries, ['purchase_orders.payment_method', '<=', $payment_method]);
         }
 
-        $purchaseOrders = $branch->purchaseOrders()
+        $database_query = $branch->purchaseOrders()
             ->where($queries)
             ->join('suppliers', 'purchase_orders.supplier_id', '=', 'suppliers.id')
             ->join('branches', 'purchase_orders.branch_id', '=', 'branches.id')
-            ->select('purchase_orders.*', 'suppliers.name as supplier_name', 'branches.name as branch_name')->get();
+            ->select('purchase_orders.*', 'suppliers.name as supplier_name', 'branches.name as branch_name');
+
+        if ($search_key) {
+            $database_query->where(function ($query) use (&$search_key) {
+                $query->where('purchase_orders.purchase_order_code', $search_key)
+                    ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
+                    ->orWhere('suppliers.name', 'like', '%' . $search_key . '%');
+            });
+        }
+
+
+        $total_rows = $database_query->get()->count();
+        $purchaseOrders = $database_query
+            ->orderBy($order_by, $sort)
+            ->offset($limit * $page)
+            ->limit($limit)
+            ->get();
+
 
         return response()->json([
             'data' => $purchaseOrders,
+            'total_rows' => $total_rows
         ], 200);
     }
 
-    public function getStorePurchaseOrder(Store $store)
+    public function getStorePurchaseOrder(Request $request, Store $store)
     {
+        $limit = $request->query('limit') ? $request->query('limit') : 10;
+        $page = $request->query('page') ? $request->query('page') : 1;
         $data = $store->purchaseOrders()
             ->join('suppliers', 'purchase_orders.supplier_id', '=', 'suppliers.id')
             ->join('branches', 'purchase_orders.branch_id', '=', 'branches.id')
-            ->select('purchase_orders.*', 'suppliers.name as supplier_name', 'branches.name as branch_name')->get();
+            ->select('purchase_orders.*', 'suppliers.name as supplier_name', 'branches.name as branch_name')
+            ->orderBy('created_at', 'desc')
+            ->offset($limit * ($page - 1))
+            ->limit($limit)
+            ->get();
 
         return response()->json([
             'data' => $data,
@@ -94,11 +121,11 @@ class PurchaseOrderController extends Controller
     public function addInventory(Request $request, Store $store, Branch $branch)
     {
         $validated = $request->validate([
-            'supplier_uuid' => 'required|string',
-            'paid_amount' => 'required|string',
+            'supplier_uuid' => 'nullable|string',
+            'paid_amount' => 'required|numeric',
             'payment_method' => 'required|string',
-            'total_amount' => 'required|string',
-            'discount' => 'required|string',
+            'total_amount' => 'required|numeric',
+            'discount' => 'required|numeric',
             'status' => 'required|string',
             'details' => 'required',
             'import_date' => 'required|date_format:Y-m-d H:i:s',
@@ -107,11 +134,13 @@ class PurchaseOrderController extends Controller
         // get the user of  token
         $created_by = $approved_by = null;
         $created_user_type = '';
-
+        $user = null;
         if (Auth::guard('user')->user()) {
+            $user = Auth::guard('user')->user();
             $created_by = $approved_by = Auth::guard('user')->user()->id;
             $created_user_type = 'owner';
         } else if (Auth::guard('employee')->user()) {
+            $user = Auth::guard('employee')->user();
             $created_by = $approved_by = Auth::guard('employee')->user()->id;
             $created_user_type = 'employee';
         } else {
@@ -120,13 +149,19 @@ class PurchaseOrderController extends Controller
             ], 401);
         }
 
+        if ($validated['supplier_uuid'] === null) {
+            $supplier_id = $store->suppliers()->where('type', 'default')->first()->id;
+        } else {
+            $supplier_id = $store->suppliers()->where('uuid', $validated['supplier_uuid'])->first()->id;
+        }
+
         $creation_date = $approved_date = $validated['import_date'];
 
-        $supplier_id = $store->suppliers()->where('uuid', $validated['supplier_uuid'])->first()->id;
+        // $supplier_id = $store->suppliers()->where('uuid', $validated['supplier_uuid'])->first()->id;
 
         $last_id = $store->purchaseOrders()->count();
 
-        $purchaseOrderCode = 'PO' . sprintf('%06d', $last_id);
+        $purchaseOrderCode = 'PO' . sprintf('%06d', $last_id + 1);
 
         $purchaseOrder = PurchaseOrder::create([
             'store_id' => $store->id,
@@ -145,6 +180,7 @@ class PurchaseOrderController extends Controller
             'discount' => $validated['discount'],
             'taxes' => 0,
             'created_user_type' => $created_user_type,
+            'created_user_name' => $user->name,
             'status' => $validated['status'],
         ]);
 
@@ -160,6 +196,49 @@ class PurchaseOrderController extends Controller
                 'transaction_type' => 'purchased',
             ]);
 
+
+            $batches = [];
+
+            if ($detail['selectedBatches']) {
+                foreach ($detail['selectedBatches'] as $batch) {
+                    if ($batch['is_new']) {
+                        $last_id = DB::table('product_batches')
+                            ->where('store_id', $store->id)
+                            ->where('branch_id', $branch->id)
+                            ->where('product_id', $product_id)
+                            ->get()->count();
+                        $batch_code = 'L' . sprintf('%04d', $last_id + 1);
+                        $created_id = DB::table('product_batches')
+                            ->insertGetId([
+                                'store_id' => $store->id,
+                                'branch_id' => $branch->id,
+                                'product_id' =>  $product_id,
+                                'quantity' => $batch['additional_quantity'],
+                                'expiry_date' => $batch['expiry_date'],
+                                'batch_code' =>  $batch_code,
+                                'position' => $batch['position']
+                            ]);
+                        $result = DB::table('product_batches')
+                            ->where('id', $created_id)->first();
+                        $result = json_decode(json_encode($result), TRUE);
+                        $result = array_merge($result, ['is_new' => true, 'additional_quantity' => $batch['additional_quantity'], 'returned_quantity' => 0]);
+                        array_push($batches, $result);
+                    } else {
+                        DB::table('product_batches')
+                            ->where('store_id', $store->id)
+                            ->where('branch_id', $branch->id)
+                            ->where('product_id', $product_id)
+                            ->where('id', $batch['id'])
+                            ->increment('quantity', $batch['additional_quantity']);
+                        $result = DB::table('product_batches')
+                            ->where('id', $batch['id'])->first();
+                        $result = json_decode(json_encode($result), TRUE);
+                        $result = array_merge($result, ['is_new' => false, 'additional_quantity' => $batch['additional_quantity'], 'returned_quantity' => 0]);
+                        array_push($batches, $result);
+                    }
+                }
+            }
+
             PurchaseOrderDetail::create([
                 'store_id' => $store->id,
                 'branch_id' => $branch->id,
@@ -171,7 +250,9 @@ class PurchaseOrderController extends Controller
                 'unit_price' => $detail['unit_price'],
                 'quantity' => $detail['quantity'],
                 'returned_quantity' => 0,
+                'batches' => json_encode($batches)
             ]);
+
 
             $product = $store->products->where('uuid', '=', $detail['uuid'])->first();
             $newQuantity = (string)((int) $product->quantity_available) + ((int) $detail['quantity']);
@@ -252,7 +333,7 @@ class PurchaseOrderController extends Controller
 
         $details = $purchaseOrder->purchaseOrderDetails()
             ->join('products', 'purchase_order_details.product_id', '=', 'products.id')
-            ->select('purchase_order_details.*', 'products.name', 'products.bar_code')->get();
+            ->select('purchase_order_details.*', 'products.name', 'products.bar_code', 'products.product_code')->get();
 
         if ($purchaseOrder->created_user_type === 'owner') {
             $created_by = User::where('id', $purchaseOrder->created_by)->first();

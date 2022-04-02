@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
+use App\Models\BranchInventory;
 use App\Models\Store;
 use App\Models\Product;
 use Illuminate\Http\Request;
@@ -11,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use App\Models\Employee;
+use Intervention\Image\Facades\Image;
 
 class BranchController extends Controller
 {
@@ -26,7 +28,7 @@ class BranchController extends Controller
             $branches = DB::table('employee_work_branch')
                 ->leftJoin('branches', 'branches.id', '=', 'employee_work_branch.branch_id')
                 ->where('employee_work_branch.employee_id', $employee_id)
-                ->where('branches.status','active')
+                ->where('branches.status', 'active')
                 ->select('branches.*')
                 ->get();
 
@@ -60,12 +62,38 @@ class BranchController extends Controller
             'status' => 'nullable|in:active,inactive',
             'lat' => 'nullable|string',
             'lng' => 'nullable|string',
+            'image' => 'nullable'
         ]);
+
+        $imagePath = "";
+        if (array_key_exists('image', $data)) {
+            if ($data['image'] != "") {
+                $imagePath = $data['image']->store('branch-images', 'public');
+                $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
+                $sized_image->save();
+                $imagePath = 'http://103.163.118.100/bkrm-api/storage/app/public/' . $imagePath;
+            }
+        }
+
+        unset($data['image']);
 
         $branch = Branch::create(array_merge($data, [
             'store_id' => $store->id,
             'uuid' => (string) Str::uuid(),
+            'img_url' => $imagePath ? $imagePath : '',
         ]));
+
+
+        // add active products to branches
+        $products = $store->products()->where('status', 'active')->get();
+        foreach($products as $product) {
+            BranchInventory::create([
+                'store_id' => $store->id,
+                'branch_id' => $branch->id,
+                'product_id' => $product->id,
+                'quantity_available' => 0,
+            ]);
+        }
 
         return response()->json([
             'message' => 'Branch created successfully',
@@ -83,7 +111,7 @@ class BranchController extends Controller
     public function update(Request $request, Store $store, Branch $branch)
     {
         $data = $request->validate([
-            'name' => 'nullable|unique:stores',
+            'name' => 'nullable|string',
             'address' => 'nullable|string',
             'ward' => 'nullable|string',
             'district' => 'nullable|string',
@@ -92,7 +120,21 @@ class BranchController extends Controller
             'status' => 'nullable|in:active,inactive',
             'lng' => 'nullable|string',
             'lat' => 'nullable|string',
+            'image' => 'nullable'
         ]);
+
+        if (array_key_exists('image', $data)) {
+            if ($data['image']) {
+
+                $imagePath = $data['image']->store('branch-images', 'public');
+                $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
+                $sized_image->save();
+                $imagePath = 'http://103.163.118.100/bkrm-api/storage/app/public/' . $imagePath;
+                $branch->update(['img_url' => $imagePath]);
+            }
+        }
+
+        unset($data['image']);
 
         $branch->update($data);
 

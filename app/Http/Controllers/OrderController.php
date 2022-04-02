@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\Store;
 use App\Models\Branch;
 use App\Models\OrderDetail;
+use App\Models\Customer;
 use App\Models\InventoryTransaction;
 use App\Models\Invoice;
 use Illuminate\Http\Request;
@@ -14,11 +15,14 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\Employee;
 use App\Models\BranchInventory;
+use Illuminate\Support\Facades\DB;
 
 class OrderController extends Controller
 {
     public function index(Request $request, Store $store, Branch $branch)
     {
+        $limit = $request->query('limit');
+        $page = $request->query('page');
         // extract query string
         $start_date = $request->query('startDate');
         $end_date = $request->query('endDate');
@@ -28,14 +32,12 @@ class OrderController extends Controller
         $max_discount = $request->query('maxDiscount');
         $status = $request->query('status');
         $payment_method = $request->query('paymentMethod');
-        $order_code = $request->query('orderCode');
+        $search_key = $request->query('searchKey');
+        $order_by = $request->query('orderBy');
+        $sort = $request->query('sort');
 
         // set up query
         $queries = [];
-
-        if ($order_code) {
-            array_push($queries, ['orders.order_code', 'LIKE', $order_code]);
-        }
 
 
         if ($start_date) {
@@ -63,46 +65,49 @@ class OrderController extends Controller
         }
 
         if ($status) {
-            array_push($queries, ['orders.status', '>=', $min_total_amount]);
+            array_push($queries, ['orders.status', '==', $status]);
         }
 
         if ($payment_method) {
             array_push($queries, ['payment_method', '<=', $payment_method]);
         }
 
-        $orders = $branch->orders()
+        $database_query =  $branch->orders()
             ->where($queries)
             ->join('customers', 'orders.customer_id', '=', 'customers.id')
             ->join('branches', 'orders.branch_id', '=', 'branches.id')
-            ->select('orders.*', 'customers.name as customer_name', 'branches.name as branch_name')->get();
+            ->select('orders.*', 'customers.name as customer_name', 'branches.name as branch_name');
 
+        if ($search_key) {
+            $database_query->where(function ($query) use (&$search_key) {
+                $query->where('orders.order_code', $search_key)
+                    ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
+                    ->orWhere('customers.name', 'like', '%' . $search_key . '%');
+            });
+        }
+
+
+        $total_rows = $database_query->get()->count();
+        $orders = $database_query
+            ->orderBy($order_by, $sort)
+            ->offset($limit * $page)
+            ->limit($limit)
+            ->get();
 
         return response()->json([
             'data' => $orders,
+            'total_rows' => $total_rows,
         ], 200);
     }
-
-    public function getStoreOrder(Store $store)
-    {
-        $data = $store->orders()
-            ->join('customers', 'orders.customer_id', '=', 'customers.id')
-            ->join('branches', 'orders.branch_id', '=', 'branches.id')
-            ->select('orders.*', 'customers.name as customer_name', 'branches.name as branch_name')->get();
-
-        return response()->json([
-            'data' => $data,
-        ]);
-    }
-
 
     public function addOrder(Request $request, Store $store, Branch $branch)
     {
         $validated = $request->validate([
-            'customer_uuid' => 'required|string',
-            'paid_date' => 'required|date_format:Y-m-d H:i:s',
+            'customer_uuid' => 'nullable|string',
+            'paid_date' => 'nullable|date_format:Y-m-d H:i:s',
             'creation_date' => 'required|date_format:Y-m-d H:i:s',
-            'total_amount' => 'required|string',
-            'paid_amount' => 'required|string',
+            'total_amount' => 'required|numeric',
+            'paid_amount' => 'required|numeric',
             'discount' => 'required|string',
             'payment_method' => 'required|string',
             'notes' => 'nullable|string',
@@ -110,15 +115,21 @@ class OrderController extends Controller
             'details' => 'required',
             'tax' => 'required|string',
             'shipping' => 'required|string',
+            'is_customer_order' => 'required|boolean',
+            'new_customer' => 'nullable|string',
+            'points' => 'nullable|numeric',
         ]);
 
         # get the user send request by token
         $created_by = null;
         $created_user_type = '';
+        $user = null;
         if (Auth::guard('user')->user()) {
+            $user = Auth::guard('user')->user();
             $created_by = Auth::guard('user')->user()->id;
             $created_user_type = 'owner';
         } else if (Auth::guard('employee')->user()) {
+            $user = Auth::guard('employee')->user();
             $created_by = Auth::guard('employee')->user()->id;
             $created_user_type = 'employee';
         } else {
@@ -127,12 +138,39 @@ class OrderController extends Controller
             ], 401);
         }
 
-        $customer_id = $store->customers()->where('uuid', $validated['customer_uuid'])->first()->id;
+        if ($validated['is_customer_order']) {
+            $newCustomer = json_decode($validated['new_customer'], true);
+
+            $customerProfile = $store->customers()->where('phone', $newCustomer['phone'])->first();
+
+            if ($customerProfile) {
+                $customer_id = $customerProfile->id;
+            } else {
+                $last_id = count($store->customers);
+                $customer_code = 'KH' . sprintf('%06d', $last_id + 1);
+
+                $customer = Customer::create(array_merge(
+                    [
+                        'store_id' => $store->id,
+                        'uuid' => (string) Str::uuid(),
+                        'customer_code' => $customer_code
+                    ],
+                    $newCustomer
+                ));
+
+                $customer_id = $customer->id;
+            }
+        } else if ($validated['customer_uuid'] === null) {
+            $customer_id = $store->customers()->where('type', 'default')->first()->id;
+        } else {
+            $store->customers()->where('uuid', $validated['customer_uuid'])->increment('points', $validated['points']);
+            $customer_id = $store->customers()->where('uuid', $validated['customer_uuid'])->first()->id;
+        }
 
         # generate code
         $last_id = $store->orders()->count();
 
-        $orderCode = 'DH' . sprintf('%06d', $last_id);
+        $orderCode = 'DH' . sprintf('%06d', $last_id + 1);
 
         $order = Order::create([
             'store_id' => $store->id,
@@ -147,13 +185,11 @@ class OrderController extends Controller
             'creation_date' => $validated['creation_date'],
             'discount' => $validated['discount'],
             'created_user_type' => $created_user_type,
+            'created_user_name' => $user->name,
             'status' => $validated['status'],
             'notes' => '',
             'order_code' => $orderCode
         ]);
-
-
-
 
         foreach ($validated['details'] as $detail) {
             $product_id = $store->products->where('uuid', '=', $detail['uuid'])->first()->id;
@@ -168,6 +204,26 @@ class OrderController extends Controller
                 // 'document_id' => $order->id,
             ]);
 
+            $batches = [];
+
+            if ($detail['selectedBatches']) {
+                foreach ($detail['selectedBatches'] as $batch) {
+                    DB::table('product_batches')
+                        ->where('store_id', $store->id)
+                        ->where('branch_id', $branch->id)
+                        ->where('product_id', $product_id)
+                        ->where('id', $batch['id'])
+                        ->decrement('quantity', $batch['additional_quantity']);
+                    $result = DB::table('product_batches')
+                        ->where('id', $batch['id'])->first();
+                    if ($result) {
+                        $result = json_decode(json_encode($result), TRUE);
+                        $result = array_merge($result, ['is_new' => false, 'additional_quantity' => $batch['additional_quantity'], 'returned_quantity' => 0]);
+                        array_push($batches, $result);
+                    }
+                }
+            }
+
             OrderDetail::create([
                 'store_id' => $store->id,
                 'branch_id' => $branch->id,
@@ -178,7 +234,8 @@ class OrderController extends Controller
                 'discount' => $detail['discount'],
                 'quantity' => $detail['quantity'],
                 'status' => 'shipped',
-                'discount' => $detail['discount']
+                'discount' => $detail['discount'],
+                'batches' => json_encode($batches)
             ]);
 
             $product = $store->products->where('uuid', '=', $detail['uuid'])->first();
@@ -201,28 +258,11 @@ class OrderController extends Controller
                 ]);
             }
         }
-
-        # generate code
-        $last_id = $store->invoices()->count();
-        $invoiceCode = 'HD' . sprintf('%06d', $last_id);
-
-        $invoice = Invoice::create([
-            'uuid' => (string) Str::uuid(),
-            'order_id' => $order->id,
-            'branch_id' => $branch->id,
-            'due_date' => $validated['paid_date'],
-            'tax' => $validated['tax'],
-            'shipping' => $validated['shipping'],
-            'amount_due' => $validated['paid_amount'],
-            'invoice_code' => $invoiceCode,
-            'store_id' => $store->id,
-        ]);
-
         return response()->json([
             'message' => 'Order created successfully',
             'data' => [
                 'order' => $order,
-                'invoice' => $invoice,
+                // 'invoice' => $invoice,
             ]
         ], 200);
     }
@@ -257,7 +297,7 @@ class OrderController extends Controller
     {
         $details = $order->orderDetails()
             ->join('products', 'order_details.product_id', '=', 'products.id')
-            ->select('order_details.*', 'products.name', 'products.bar_code')->get();
+            ->select('order_details.*', 'products.name', 'products.bar_code', 'products.product_code')->get();
 
         if ($order->created_user_type === 'owner') {
             $created_by = User::where('id', $order->user_id)->first();

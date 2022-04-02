@@ -11,10 +11,7 @@ class Store extends Model
     use HasFactory;
     protected $guarded = [];
 
-    protected $hidden = [
-        'id',
-        'user_id'
-    ];
+    protected $hidden = [];
 
     public function products()
     {
@@ -31,12 +28,12 @@ class Store extends Model
         return $this->hasMany(Supplier::class);
     }
 
-    public function branches() 
+    public function branches()
     {
         return $this->hasMany(Branch::class);
     }
 
-    public function categories() 
+    public function categories()
     {
         return $this->hasMany(Category::class);
     }
@@ -46,25 +43,37 @@ class Store extends Model
         return $this->hasMany(Customer::class);
     }
 
-    public function purchaseOrders(){
+    public function purchaseOrders()
+    {
         return $this->hasMany(PurchaseOrder::class);
     }
-    public function purchaseReturns(){
+
+    public function customerOrders()
+    {
+        return $this->hasMany(CustomerOrder::class);
+    }
+
+    public function purchaseReturns()
+    {
         return $this->hasMany(PurchaseReturn::class);
     }
-    public function refunds(){
+    public function refunds()
+    {
         return $this->hasMany(Refund::class);
     }
 
-    public function orders() {
+    public function orders()
+    {
         return $this->hasMany(Order::class);
     }
-    
-    public function invoices() {
+
+    public function invoices()
+    {
         return $this->hasMany(Invoice::class);
     }
 
-    public function inventoryChecks() {
+    public function inventoryChecks()
+    {
         return $this->hasMany(InventoryCheck::class);
     }
 }

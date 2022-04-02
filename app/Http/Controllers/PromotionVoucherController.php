@@ -7,6 +7,9 @@ use Illuminate\Http\Request;
 use App\Models\Store;
 use App\Models\Voucher;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Config;
+use App\Mail\VoucherMail;
 
 class PromotionVoucherController extends Controller
 {
@@ -17,6 +20,7 @@ class PromotionVoucherController extends Controller
             'promotion_condition' => 'nullable|string',
             'start_date' => 'nullable|date_format:Y-m-d',
             'end_date' => 'nullable|date_format:Y-m-d',
+            'customer_birth' => 'nullable|boolean'
         ]);
 
         $last_id = DB::table('promotions')
@@ -96,17 +100,16 @@ class PromotionVoucherController extends Controller
 
     public function getAllPromotions(Request $request, Store $store)
     {
-        $limit = $request->query("limit") ? $request->query("limit") : 10;
-        $page = $request->query("page") ? $request->query("page") : 1;
-
+        $limit = $request->query("limit");
+        $page = $request->query("page");
+        
         $promotions = DB::table('promotions')
             ->where('store_id', $store->id)
             ->where('status', '<>', 'deleted')
             ->orderBy('created_at', 'desc')
-            ->offset($limit * ($page - 1))
+            ->offset($limit * ($page))
             ->limit($limit)
             ->get();
-
 
         return response()->json([
             'promotions' => $promotions,
@@ -116,9 +119,8 @@ class PromotionVoucherController extends Controller
 
     public function getAllVouchers(Request $request, Store $store)
     {
-        $limit = $request->query("limit") ? $request->query("limit") : 10;
-        $page = $request->query("page") ? $request->query("page") : 1;
-
+        $limit = $request->query("limit");
+        $page = $request->query("page");
         $vouchers = DB::table('vouchers')
             ->where('store_id', $store->id)
             ->where('status', '<>', 'deleted')
@@ -172,5 +174,45 @@ class PromotionVoucherController extends Controller
         return response()->json([
             'message' => 'success',
         ]);
+    }
+    public function sendVoucher(Request $request, Store $store) {
+            $email_configuration = json_decode($store->email_configuration, true);
+
+            if(!is_null($email_configuration)) {
+                $config = array(
+                    'driver'     =>     'smtp',
+                    'host'       =>     'smtp.gmail.com',
+                    'port'       =>     587,
+                    'username'   =>     $email_configuration['username'],
+                    'password'   =>     $email_configuration['password'],
+                    'encryption' =>     'tls',
+                    'from'       =>     array('address' => $email_configuration['username'], 'name' => $store->name)
+                );
+                Config::set('mail', $config);
+            }
+
+
+        $validated = $request->validate([
+            'customer_email' => 'required|string',
+            'voucher' => 'required',
+            'customer_name' => 'required|string',
+        ]);
+
+        $details = [
+            'customer_email' => $validated['customer_email'],
+            'customer_name' => $validated['customer_name'],
+            'voucher_name' => $validated['voucher']['name'],
+            'voucher_end_date' => $validated['voucher']['end_date'],
+            'voucher_start_date' => $validated['voucher']['start_date'],
+            'voucher_min_order' => $validated['voucher']['min_order_total'],
+            'voucher_value' => $validated['voucher']['value'],
+            'voucher_code' => $validated['voucher']['code'],
+            'store_name' => $store->name,
+            'store_phone' => $store->phone,
+            'store_web_page' => $store->web_page,
+        ];
+       
+        Mail::send(new VoucherMail($details));
+
     }
 }

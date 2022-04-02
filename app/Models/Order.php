@@ -11,7 +11,7 @@ class Order extends Model
     protected $guarded = [];
 
     protected $hidden = [
-        'id',
+        
     ];
 
     public function orderDetails()

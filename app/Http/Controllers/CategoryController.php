@@ -23,7 +23,8 @@ class CategoryController extends Controller
         $data = [];
         foreach ($categories as $category) {
             $children = $this->getSubCategory($category['id']);
-            array_push($data, array_merge($category, ['children' => $children]));
+
+            array_push($data, array_merge($category, ['children' => $children, 'title' => $category['name'], 'value' => $category['uuid']]));
         }
         return $data;
     }
@@ -33,9 +34,9 @@ class CategoryController extends Controller
         $top_parents = $store->categories()->whereNull('parent_category_id')->get()->toArray();
         $data = [];
         foreach ($top_parents as $parent) {
-            array_push($data, array_merge($parent, ['children' => $this->getSubCategory($parent['id'])]));
+            array_push($data, array_merge($parent, ['children' => $this->getSubCategory($parent['id']), 'title' => $parent['name'], 'value' => $parent['uuid']]));
         }
-        return $data;
+        return response()->json(['data' => $data]);
     }
 
     public function getParentCategory(Store $store)
