@@ -113,7 +113,6 @@ class CustomerController extends Controller
         ], 200);
     }
 
-
     public function update(Request $request, Store $store, Customer $customer)
     {
         $validated = $request->validate([
@@ -126,6 +125,7 @@ class CustomerController extends Controller
             'province' => 'nullable|string',
             'payment_info' => 'nullable|string',
             'status' => 'nullable|string',
+            'vouchers' => 'nullable|string'
         ]);
 
         if (array_key_exists('phone', $validated)) {
@@ -201,5 +201,23 @@ class CustomerController extends Controller
         return response()->json([
             'message' => 'customers added successfully'
         ], 200);
+    }
+
+    public function customerDebt(Request $request, Store $store) {
+        $storeConfig = json_decode($store['general_configuration'], true)['notifyDebt'];
+
+        if ($storeConfig['checkDebtAmount']) {
+            $customers = $store->orders()
+                ->join('customers', 'customers.id', '=', 'orders.customer_id')
+                ->selectRaw('orders.*, customers.*, SUM(orders.total_amount - orders.paid_amount) AS debt, MAX(orders.')
+                ->groupBy('customers.name', 'customers.email', 'customers.address', 'debt', 'customers.phone', 'customers.status')
+                ->where('customers.status', '=', 'active')
+                ->where('debt', '>=', $storeConfig['debtAmount']);
+
+        } else {
+            $customers = $store->customers()
+                ->where('customers.status', '=', 'active')
+                ->where('debt', '>=', $storeConfig['debtAmount']);
+        }
     }
 }

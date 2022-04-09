@@ -85,13 +85,19 @@ class PurchaseOrderController extends Controller
             });
         }
 
-
         $total_rows = $database_query->get()->count();
-        $purchaseOrders = $database_query
-            ->orderBy($order_by, $sort)
-            ->offset($limit * $page)
-            ->limit($limit)
-            ->get();
+
+        if ($limit) {
+            $purchaseOrders = $database_query
+                ->orderBy($order_by, $sort)
+                ->offset($limit * $page)
+                ->limit($limit)
+                ->get();
+        } else {
+            $purchaseOrders = $database_query
+                ->orderBy($order_by, $sort)
+                ->get();
+        }
 
 
         return response()->json([
@@ -154,7 +160,6 @@ class PurchaseOrderController extends Controller
         } else {
             $supplier_id = $store->suppliers()->where('uuid', $validated['supplier_uuid'])->first()->id;
         }
-
         $creation_date = $approved_date = $validated['import_date'];
 
         // $supplier_id = $store->suppliers()->where('uuid', $validated['supplier_uuid'])->first()->id;

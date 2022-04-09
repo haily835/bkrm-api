@@ -67,11 +67,17 @@ class InventoryCheckController extends Controller
 
         $total_rows = $query->get()->count();
 
-        $inventoryChecks = $query
-            ->orderBy($order_by, $sort)
-            ->offset($limit*$page)
-            ->limit($limit)
-            ->get()->toArray();
+        if ($limit) {
+            $inventoryChecks = $query
+                ->orderBy($order_by, $sort)
+                ->offset($limit*$page)
+                ->limit($limit)
+                ->get()->toArray();
+        } else {
+            $inventoryChecks = $query
+                ->orderBy($order_by, $sort)
+                ->get()->toArray();
+        }
 
         foreach($inventoryChecks as $inventoryCheck) {
             if ($inventoryCheck['created_user_type'] === 'owner') {

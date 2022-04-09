@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Auth;
 use DateTime;
+use Illuminate\Support\Facades\DB;
 
 class StoreController extends Controller
 {
@@ -43,10 +44,6 @@ class StoreController extends Controller
 
         if ($request['image']) {
             $imagePath = $request['image']->store('store-images', 'public');
-
-            $image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
-            $image->save();
-
             $data['image'] = 'http://103.163.118.100/bkrm-api/storage/app/public/' . $imagePath;
         } else {
             $data['image'] = 'http://103.163.118.100/bkrm-api/storage/app/public/store-images/store-default.png';
@@ -64,6 +61,13 @@ class StoreController extends Controller
         ], 200);
     }
 
+    public function toggleInventory(Request $request, Store $store) {
+        $store->products()->update(['quantity_available' => '0']);
+        DB::table('branch_inventories')->where('store_id', $store->id)->update(['quantity_available' => 0]);
+        DB::table('product_batches')->where('store_id', $store->id)->update(['quantity' => 0]);
+        return response()->json(['data' => 'success']);
+    }
+
     public function update(Request $request, Store $store)
     {
         $data = $request->validate([
@@ -77,13 +81,9 @@ class StoreController extends Controller
             'email_configuration' => 'nullable|string',
             'web_configuration' => 'nullable|string',
             'general_configuration' => 'nullable|string',
-            'images' => 'nullable'
+            'images' => 'nullable',
+            'img_urls' => 'nullable',
         ]);
-        return response()->json([
-            'message' => 'Store updated successfully',
-
-            'data' => $data,
-        ], 200);
         if (array_key_exists('web_configuration', $data)) {
             if ($data['web_configuration']) {
                 $config = json_decode($data['web_configuration'], true);
@@ -104,11 +104,16 @@ class StoreController extends Controller
             unset($data['images']);
             $data = array_merge($data, ['banners' => $banners]);
         }
+        if (array_key_exists('img_urls', $data)) {
+            $banners = array_merge($banners, $data['img_urls']);
+            $data = array_merge($data, ['banners' => $banners]);
+            unset($data['img_urls']);
+        }
         $store->update($data);
         return response()->json([
             'message' => 'Store updated successfully',
             'store' => $store,
-            'data' => $banners,
+            'data' => $data,
         ], 200);
     }
 
@@ -304,5 +309,28 @@ class StoreController extends Controller
             'content' => 'required|string'
         ]);
         Mail::send(new StoreEmail($validated));
+    }
+
+    public function getNotification(Request $request, Store $store, Branch $branch) {
+        $current_date = $request->query('current_date');
+    
+        $out_of_stock_products = $branch->inventory()
+            ->join('products', 'branch_inventories.product_id', '=', 'products.id')
+            ->where('branch_inventories.quantity_available', '<=', 'products.min_reorder_quantity')
+            ->where('products.status', '=', 'active')
+            ->where('products.has_variance', '=', false)
+            ->get()->toArray();
+        
+        $out_of_date_batches = DB::table('product_batches')
+            ->join('products', 'products.id', '=', 'product_batches.product_id')
+            ->where('product_batches.quantity', '>=', 0)
+            ->where(DB::raw('DATE_ADD(product_batches.expiry_date, INTERVAL -products.notification_period DAY)'), '<', $current_date)->get();
+
+        return response()->json([
+            'data' => [
+                'out_of_stock_products' =>  $out_of_stock_products,
+                'out_of_date_batches' => $out_of_date_batches
+            ]
+        ]);
     }
 }

@@ -20,7 +20,10 @@ class PromotionVoucherController extends Controller
             'promotion_condition' => 'nullable|string',
             'start_date' => 'nullable|date_format:Y-m-d',
             'end_date' => 'nullable|date_format:Y-m-d',
-            'customer_birth' => 'nullable|boolean'
+            'customer_birth' => 'nullable|boolean',
+            'dateAdvanceSetting' => 'nullable|string',
+            'discountType' => 'nullable|string',
+            'discountKey' => 'nullable|string',
         ]);
 
         $last_id = DB::table('promotions')
@@ -83,13 +86,25 @@ class PromotionVoucherController extends Controller
 
         $promotions = DB::table('promotions')
             ->where('store_id', $store->id)
-            ->where('start_date', '>=', $current_date)
-            ->where('end_date', '<=', $current_date)
+            ->where(function ($query) use ($current_date) {
+                $query->where('start_date', '>=', $current_date)
+                    ->orWhere('start_date',  null);
+            })
+            ->where(function ($query) use ($current_date) {
+                $query->where('end_date', '<=', $current_date)
+                    ->orWhere('end_date',  null);
+            })
             ->where('status', 'active')->get();
         $voucher = DB::table('vouchers')
             ->where('store_id', $store->id)
-            ->where('start_date', '>=', $current_date)
-            ->where('end_date', '<=', $current_date)
+            ->where(function ($query) use ($current_date) {
+                $query->where('start_date', '>=', $current_date)
+                    ->orWhere('start_date',  null);
+            })
+            ->where(function ($query) use ($current_date) {
+                $query->where('end_date', '<=', $current_date)
+                    ->orWhere('end_date',  null);
+            })
             ->where('status', 'active')->get();
 
         return response()->json([
@@ -102,7 +117,7 @@ class PromotionVoucherController extends Controller
     {
         $limit = $request->query("limit");
         $page = $request->query("page");
-        
+
         $promotions = DB::table('promotions')
             ->where('store_id', $store->id)
             ->where('status', '<>', 'deleted')
@@ -144,6 +159,9 @@ class PromotionVoucherController extends Controller
             'start_date' => 'nullable|date_format:Y-m-d',
             'end_date' => 'nullable|date_format:Y-m-d',
             'status' => 'nullable|string',
+            'dateAdvanceSetting' => 'nullable|string',
+            'discountType' => 'nullable|string',
+            'discountKey' => 'nullable|string',
         ]);
 
         DB::table('promotions')
@@ -175,21 +193,22 @@ class PromotionVoucherController extends Controller
             'message' => 'success',
         ]);
     }
-    public function sendVoucher(Request $request, Store $store) {
-            $email_configuration = json_decode($store->email_configuration, true);
+    public function sendVoucher(Request $request, Store $store)
+    {
+        $email_configuration = json_decode($store->email_configuration, true);
 
-            if(!is_null($email_configuration)) {
-                $config = array(
-                    'driver'     =>     'smtp',
-                    'host'       =>     'smtp.gmail.com',
-                    'port'       =>     587,
-                    'username'   =>     $email_configuration['username'],
-                    'password'   =>     $email_configuration['password'],
-                    'encryption' =>     'tls',
-                    'from'       =>     array('address' => $email_configuration['username'], 'name' => $store->name)
-                );
-                Config::set('mail', $config);
-            }
+        if (!is_null($email_configuration)) {
+            $config = array(
+                'driver'     =>     'smtp',
+                'host'       =>     'smtp.gmail.com',
+                'port'       =>     587,
+                'username'   =>     $email_configuration['username'],
+                'password'   =>     $email_configuration['password'],
+                'encryption' =>     'tls',
+                'from'       =>     array('address' => $email_configuration['username'], 'name' => $store->name)
+            );
+            Config::set('mail', $config);
+        }
 
 
         $validated = $request->validate([
@@ -211,8 +230,7 @@ class PromotionVoucherController extends Controller
             'store_phone' => $store->phone,
             'store_web_page' => $store->web_page,
         ];
-       
-        Mail::send(new VoucherMail($details));
 
+        Mail::send(new VoucherMail($details));
     }
 }

@@ -87,12 +87,21 @@ class OrderController extends Controller
         }
 
 
+
         $total_rows = $database_query->get()->count();
-        $orders = $database_query
-            ->orderBy($order_by, $sort)
-            ->offset($limit * $page)
-            ->limit($limit)
-            ->get();
+
+        if ($limit) {
+            $orders = $database_query
+                ->orderBy($order_by, $sort)
+                ->offset($limit * $page)
+                ->limit($limit)
+                ->get();
+
+        } else {
+            $orders = $database_query
+                ->orderBy($order_by, $sort)
+                ->get();
+        }
 
         return response()->json([
             'data' => $orders,
@@ -119,6 +128,47 @@ class OrderController extends Controller
             'new_customer' => 'nullable|string',
             'points' => 'nullable|numeric',
         ]);
+
+        $isManageInventoryEnable = json_decode($store['general_configuration'], true)['inventory']['status'];
+
+        if ($isManageInventoryEnable) {
+            $errorDetails = [];
+            foreach ($validated['details'] as $detail) {
+                $product_id = $store->products->where('uuid', '=', $detail['uuid'])->first()->id;
+                $batches = [];
+    
+                $productOfBranch = BranchInventory::where([
+                    ['branch_id', '=', $branch->id], 
+                    ['product_id', '=', $product_id],
+                    ['quantity_available', '>=', $detail['quantity']]
+                ])->first();
+                
+                if (!$productOfBranch) {
+                    array_push($errorDetails, $detail);
+                    continue;
+                }
+    
+                if ($detail['selectedBatches']) {
+                    foreach ($detail['selectedBatches'] as $batch) {
+                        $reducedBatch = DB::table('product_batches')
+                            ->where('store_id', $store->id)
+                            ->where('branch_id', $branch->id)
+                            ->where('product_id', $product_id)
+                            ->where('id', $batch['id'])
+                            ->where('quantity', '>=', $batch['additional_quantity'])
+                            ->first();
+                        if (!$reducedBatch) {
+                            array_push($errorDetails, $detail);
+                            break; 
+                        }
+                    }
+                }
+            }
+    
+            if (count($errorDetails)) {
+                return response()->json(['data' => $errorDetails, 'status' => 'failure']);
+            }
+        }
 
         # get the user send request by token
         $created_by = null;
@@ -262,7 +312,6 @@ class OrderController extends Controller
             'message' => 'Order created successfully',
             'data' => [
                 'order' => $order,
-                // 'invoice' => $invoice,
             ]
         ], 200);
     }
@@ -288,6 +337,7 @@ class OrderController extends Controller
         $newOrder = Order::create($order);
 
         return response()->json([
+            'status' => 'success',
             'message' => 'Order created successfully',
             'data' => $newOrder,
         ], 200);

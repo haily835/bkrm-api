@@ -70,13 +70,15 @@ Route::middleware('cors')->post('/storeInfo/{store:uuid}/addOrder', [CustomerPag
 // Protected routes
 Route::middleware(['auth:user,employee'])->group(function () {
     // routes for update store configurations
-    Route::put('/stores/{store:uuid}', [StoreController::class, 'update']);
+    Route::post('/stores/{store:uuid}', [StoreController::class, 'update']);
     Route::get('/stores/{store:uuid}', [StoreController::class, 'show']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/getNotification', [StoreController::class, 'getNotification']);
     Route::post('/stores/{store:uuid}/confirmPassword', [AuthController::class, 'confirmPassword']);
+    Route::post('/stores/{store:uuid}/toggleInventory', [StoreController::class, 'toggleInventory']);
     Route::post('/stores/{store:uuid}/editProfile', [AuthController::class, 'editProfile']);
     Route::get('/stores/{store:uuid}/branches/{branch:uuid}/activities', [StoreController::class, 'activities']);
     Route::post('/stores/{store:uuid}/updateStoreConfiguration', [StoreController::class, 'updateStoreConfiguration']);
-    Route::get('/stores/{store:uuid}/sendEmail', [StoreController::class, 'sendEmail']);
+    Route::post('/stores/{store:uuid}/sendEmail', [StoreController::class, 'sendEmail']);
 
     // routes for report of store
     Route::get('/stores/{store:uuid}/report/overview', [StoreReportController::class, 'overview']);
@@ -112,7 +114,7 @@ Route::middleware(['auth:user,employee'])->group(function () {
 
     // routes for products
     // Route::get('/stores/{store:uuid}/products', [ProductController::class, 'index']);
-    Route::post('/stores/{store:uuid}/products/addProductByJson', [ProductController::class, 'addProductByJson']);
+    Route::post('/stores/{store:uuid}/branches/{branch:uuid}/products/addProductByJson', [ProductController::class, 'addProductByJson']);
     Route::post('/stores/{store:uuid}/products/addProductWithVariation', [ProductController::class, 'addProductWithVariation']);
     Route::get('/stores/{store:uuid}/branches/{branch:uuid}/products', [ProductController::class, 'indexOfBranch']);
     Route::get('/stores/{store:uuid}/branches/{branch:uuid}/search-products', [ProductController::class, 'searchBranchInventory']);

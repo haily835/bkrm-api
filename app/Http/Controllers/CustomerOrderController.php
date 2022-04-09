@@ -54,7 +54,7 @@ class CustomerOrderController extends Controller
         // }
 
 
-
+        
         $database_query =  $branch->customerOrders()
             ->where($queries)
             ->join('branches', 'customer_orders.branch_id', '=', 'branches.id')
@@ -70,11 +70,17 @@ class CustomerOrderController extends Controller
 
 
         $total_rows = $database_query->get()->count();
-        $orders = $database_query
-            ->orderBy($order_by, $sort)
-            ->offset($limit * $page)
-            ->limit($limit)
-            ->get();
+        if ($limit) {
+            $orders = $database_query
+                ->orderBy($order_by, $sort)
+                ->offset($limit * $page)
+                ->limit($limit)
+                ->get();
+        } else {
+            $orders = $database_query
+                ->orderBy($order_by, $sort)
+                ->get();
+        }
 
         return response()->json([
             'data' => $orders,

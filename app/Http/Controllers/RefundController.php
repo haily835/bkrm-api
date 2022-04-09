@@ -225,11 +225,17 @@ class RefundController extends Controller
 
         $total_rows = $database_query->get()->count();
 
-        $refunds = $database_query
-            ->orderBy($order_by, $sort)
-            ->offset($limit * $page)
-            ->limit($limit)
-            ->get();
+        if ($limit) {
+            $refunds = $database_query
+                ->orderBy($order_by, $sort)
+                ->offset($limit * $page)
+                ->limit($limit)
+                ->get();
+        } else {
+            $refunds = $database_query
+                ->orderBy($order_by, $sort)
+                ->get();
+        }
 
         return response()->json([
             'data' => $refunds,

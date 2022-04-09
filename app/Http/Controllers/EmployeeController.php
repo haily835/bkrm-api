@@ -33,7 +33,12 @@ class EmployeeController extends Controller
             });
         }
         $total_rows = $db_query->count();
-        $employees = $db_query->offset($limit * $page)->limit($limit)->get();
+
+        if ($limit) {
+            $employees = $db_query->offset($limit * $page)->limit($limit)->get();
+        } else {
+            $employees = $db_query->get();
+        }
         return response()->json([
             'data' => $employees,
             'total_rows' => $total_rows,

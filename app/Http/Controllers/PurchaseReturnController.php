@@ -93,11 +93,17 @@ class PurchaseReturnController extends Controller
 
         $total_rows = $database_query->get()->count();
 
-        $purchaseReturns = $database_query
-            ->orderBy($order_by, $sort)
-            ->offset($limit * $page)
-            ->limit($limit)
-            ->get();
+        if ($limit) {
+            $purchaseReturns = $database_query
+                ->orderBy($order_by, $sort)
+                ->offset($limit * $page)
+                ->limit($limit)
+                ->get();
+        } else {
+            $purchaseReturns = $database_query
+                ->orderBy($order_by, $sort)
+                ->get();
+        }
 
         return response()->json([
             'data' => $purchaseReturns,
