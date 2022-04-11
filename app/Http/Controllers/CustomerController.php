@@ -203,13 +203,13 @@ class CustomerController extends Controller
         ], 200);
     }
 
-    public function customerDebt(Request $request, Store $store) {
+    public function customerDebt($store) {
         $storeConfig = json_decode($store['general_configuration'], true)['notifyDebt'];
 
         if ($storeConfig['checkDebtAmount']) {
             $customers = $store->orders()
                 ->join('customers', 'customers.id', '=', 'orders.customer_id')
-                ->selectRaw('orders.*, customers.*, SUM(orders.total_amount - orders.paid_amount) AS debt, MAX(orders.')
+                ->selectRaw('orders.*, customers.*, SUM(orders.total_amount - orders.paid_amount) AS debt, MAX(orders.creation_date) as max_order_date')
                 ->groupBy('customers.name', 'customers.email', 'customers.address', 'debt', 'customers.phone', 'customers.status')
                 ->where('customers.status', '=', 'active')
                 ->where('debt', '>=', $storeConfig['debtAmount']);

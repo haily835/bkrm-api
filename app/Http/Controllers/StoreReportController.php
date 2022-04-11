@@ -14,7 +14,7 @@ use App\Models\Branch;
 
 class StoreReportController extends Controller
 {
-  public function overview(Request $request, Store $store)
+  public function overview(Request $request, Store $store, Branch $branch)
   {
     $numOfProducts = $store->products()->where('status', '<>', 'deleted')->count();
     $numOfEmployees = $store->employees()->where('status', 'active')->count();
@@ -26,31 +26,37 @@ class StoreReportController extends Controller
       : "";
 
     $end_date = $request->query('to_date') ?
-      $request->query('to_date') . ' 11:59:59'
+      $request->query('to_date') . ' 23:59:59'
       : "";
 
     $purchaseOrders = $store->purchaseOrders()
+      ->where('branch_id', $branch->id)
       ->where('purchase_orders.creation_date', '>=', $start_date)
       ->where('purchase_orders.creation_date', '<', $end_date)->get();
 
     $orders = $store->orders()
-      ->where('orders.created_at', '>=', $start_date)
-      ->where('orders.created_at', '<', $end_date)->get();
+      ->where('branch_id', $branch->id)
+      ->where('orders.creation_date', '>=', $start_date)
+      ->where('orders.creation_date', '<', $end_date)->get();
 
     $purchaseReturns = $store->purchaseReturns()
+      ->where('branch_id', $branch->id)
       ->where('purchase_returns.creation_date', '>=', $start_date)
       ->where('purchase_returns.creation_date', '<', $end_date)->get();
 
     $refunds = $store->refunds()
+      ->where('branch_id', $branch->id)
       ->where('refunds.created_at', '>=', $start_date)
       ->where('refunds.created_at', '<', $end_date)->get();
 
-    $outAccount = $purchaseOrders->sum('total_amount') + $refunds->sum('total_amount');
-    $inAccount = $orders->sum('total_amount') + $purchaseReturns->sum('total_amount');
+    $outAccount = $purchaseOrders->sum('total_amount') - $purchaseOrders->sum('discount') + $refunds->sum('total_amount');
+    $inAccount = $orders->sum('total_amount') - $orders->sum('discount') + $purchaseReturns->sum('total_amount');
 
-    $outAccount = $purchaseOrders->sum('total_amount') - $purchaseReturns->sum('total_amount');
-    $inAccount = $orders->sum('total_amount') - $refunds->sum('total_amount');
-
+    // cong no phai thu
+    $receivable = $orders->sum('total_amount') - $orders->sum('paid_amount') + $purchaseReturns->sum('total_amount') - $purchaseReturns->sum('paid_amount');
+    
+    // cong no phai tra
+    $payable = $purchaseOrders->sum('total_amount') - $purchaseOrders->sum('paid_amount') + $refunds->sum('total_amount') - $refunds->sum('paid_amount');
 
 
     return response()->json([
@@ -59,6 +65,8 @@ class StoreReportController extends Controller
         'inAccount' => $inAccount,
         'outAccount' => $outAccount,
         'numOfProducts' => $numOfProducts,
+        'receivable' => $receivable,
+        'payable' => $payable,
         'numOfEmployees' => $numOfEmployees,
         'numOfBranches' => $numOfBranches,
         'numOfCustomers' => $numOfCustomers,
@@ -67,43 +75,30 @@ class StoreReportController extends Controller
   }
 
 
-  public function statistic(Request $request, Store $store)
+  public function statistic(Request $request, Store $store, Branch $branch)
   {
     // $check_permission = FrequentQuery::checkPermission($user->id, $branch_id, ['reporting']);
 
     $date_list = $this->split_date($request->query('from_date'), $request->query('to_date'), $request->query('unit'));
-
+    $profit = [];
+    $revenue = [];
+    $purchase = [];
+    $capital = [];
+    $receivable = [];
+    $payable = [];
     for ($i = 0; $i < (count($date_list) - 1); $i++) {
       $begin = $date_list[$i] . " 00:00:00";
       $end = $date_list[$i + 1] . " 00:00:00";
       $between_date_list[] = $begin . " - " . $end;
 
-      $profit[] = $this->profit($store->id, $begin, $end);
-      $revenue[] = $this->revenue($store->id, $begin, $end);
-      $purchase[] = $this->purchase($store->id, $begin, $end);
-      $capital[] = $this->capital($store->id, $begin, $end);
+      array_push($profit, $this->profit($store->id, $branch->id, $begin, $end));
+      array_push($revenue,$this->revenue($store->id,$branch->id, $begin, $end));
+      array_push($purchase, $this->purchase($store->id,$branch->id, $begin, $end));
+      array_push($capital, $this->capital($store->id,$branch->id, $begin, $end));
+      array_push($receivable, $this->receivable($store->id,$branch->id, $begin, $end));
+      array_push($payable, $this->payable($store->id,$branch->id, $begin, $end));
     }
 
-    // $return_str = ['state', 'errors'];
-    $return_str[] = 'date_list';
-    $return_str[] = 'between_date_list';
-    // $return_str[] = 'revenue';
-    // $return_str[] = 'profit';
-    // $return_str[] = 'purchase';
-    // $return_str[] = 'capital';
-
-    if ($request->query('revenue')) {
-      $return_str[] = 'revenue';
-    }
-    if ($request->query('profit')) {
-      $return_str[] = 'profit';
-    }
-    if ($request->query('purchase')) {
-      $return_str[] = 'purchase';
-    }
-    if ($request->query('capital')) {
-      $return_str[] = 'capital';
-    }
     // $items_info = FrequentQuery::getItemInfo($branch_id);
     // $purchase_price_info = FrequentQuery::getLatestPurchasedPrice();
     // $no_purchased_price_items = $items_info->leftJoinSub($purchase_price_info, 'purchase_price_info', function ($join) {
@@ -118,7 +113,17 @@ class StoreReportController extends Controller
     // $return_str[] = 'no_purchased_price_items';
     $state = 'success';
     $errors = 'none';
-    return response()->json(compact($return_str));
+    // return response()->json(compact($return_str));
+    return response()->json([
+      'date_list' => $date_list,
+      'purchase' => $purchase,
+      'revenue' => $revenue,
+      'gag' => 'gagaS',
+      'capital' => $capital,
+      'profit' => $profit,
+      'payable' => $payable,
+      'receivable' => $receivable,
+    ]);
   }
 
   public function getTopOfStore(Request $request, Store $store)
@@ -278,64 +283,129 @@ class StoreReportController extends Controller
     return $date_list;
   }
 
-  private function revenue($store_id, $begin, $end)
+  private function revenue($store_id, $branch_id, $begin, $end)
   {
-    $invoice = DB::table('orders')
+    $total = DB::table('orders')
       ->where('orders.store_id', $store_id)
-      ->where('orders.created_at', '>=', $begin)
-      ->where('orders.created_at', '<', $end)
-      ->selectRaw('COALESCE(SUM(orders.total_amount - orders.discount),0) AS revenue')
-      ->first();
-    return $invoice->revenue;
+      ->where('orders.branch_id', $branch_id)
+      ->where('orders.creation_date', '>=', $begin)
+      ->where('orders.creation_date', '<', $end)
+      ->leftJoin('order_details', 'order_details.order_id', '=', 'orders.id')
+      ->leftJoin('products', 'products.id', '=', 'order_details.product_id')
+      ->selectRaw('COALESCE(SUM((order_details.quantity - order_details.returned_quantity)*(order_details.unit_price)),0) AS total')
+      ->first()->total;
+
+    $discount = DB::table('orders')
+      ->where('orders.store_id', $store_id)
+      ->where('orders.branch_id', $branch_id)
+      ->where('orders.creation_date', '>=', $begin)
+      ->where('orders.creation_date', '<', $end)
+      ->sum('discount');
+    return $total - $discount;
   }
 
-  private function profit($store_id, $begin, $end)
+  private function profit($store_id, $branch_id, $begin, $end)
   {
     $invoice = DB::table('orders')
       ->where('orders.store_id', $store_id)
+      ->where('orders.branch_id', $branch_id)
       ->leftJoin('order_details', 'order_details.order_id', '=', 'orders.id')
       ->leftJoin('products', 'products.id', '=', 'order_details.product_id');
 
     $invoice = $invoice
-      ->where('orders.created_at', '>=', $begin)
-      ->where('orders.created_at', '<', $end)
-      ->selectRaw('COALESCE(SUM(order_details.quantity*(order_details.unit_price - COALESCE(products.standard_price, 0))),0) AS profit')
+      ->where('orders.creation_date', '>=', $begin)
+      ->where('orders.creation_date', '<', $end)
+      ->selectRaw('COALESCE(SUM((order_details.quantity - order_details.returned_quantity)*(order_details.unit_price - COALESCE(products.standard_price, 0))),0) AS profit')
       ->first();
 
     $discount = DB::table('orders')
       ->where('orders.store_id', $store_id)
-      ->where('orders.created_at', '>=', $begin)
-      ->where('orders.created_at', '<', $end)
+      ->where('orders.branch_id', $branch_id)
+      ->where('orders.creation_date', '>=', $begin)
+      ->where('orders.creation_date', '<', $end)
       ->selectRaw('COALESCE(SUM(orders.discount),0) AS discount')
       ->first();
     return $invoice->profit - $discount->discount;
   }
 
-  private function capital($store_id, $begin, $end)
+  private function capital($store_id, $branch_id, $begin, $end)
   {
     $invoice = DB::table('orders')
       ->where('orders.store_id', $store_id)
+      ->where('orders.branch_id', $branch_id)
       ->leftJoin('order_details', 'order_details.order_id', '=', 'orders.id')
       ->leftJoin('products', 'products.id', '=', 'order_details.product_id');
     // $latest_purchased_price = FrequentQuery::getLatestPurchasedPrice();
 
     $invoice = $invoice
-      ->where('orders.created_at', '>=', $begin)
-      ->where('orders.created_at', '<', $end)
-      ->selectRaw('COALESCE(SUM(order_details.quantity * COALESCE(products.standard_price, 0)),0) AS capital')
+      ->where('orders.creation_date', '>=', $begin)
+      ->where('orders.creation_date', '<', $end)
+      ->selectRaw('COALESCE(SUM((order_details.quantity - order_details.returned_quantity)* COALESCE(products.standard_price, 0)),0) AS capital')
       ->first();
     return $invoice->capital;
   }
 
-  private function purchase($store_id, $begin, $end)
+  private function receivable($store_id, $branch_id, $begin, $end)
+  {
+    $receivableOrders = DB::table('orders')
+      ->where('orders.store_id', $store_id)
+      ->where('orders.branch_id', $branch_id)
+      ->where('orders.creation_date', '>=', $begin)
+      ->where('orders.creation_date', '<', $end)
+      ->selectRaw('COALESCE(SUM(orders.total_amount - orders.paid_amount),0) AS receivable')
+      ->first()
+      ->receivable;
+
+    $receivablePurchaseReturn = DB::table('purchase_returns')
+      ->where('purchase_returns.store_id', $store_id)
+      ->where('purchase_returns.branch_id', $branch_id)
+      ->where('purchase_returns.creation_date', '>=', $begin)
+      ->where('purchase_returns.creation_date', '<', $end)
+      ->selectRaw('COALESCE(SUM(purchase_returns.total_amount - purchase_returns.paid_amount),0) AS receivable')
+      ->first()
+      ->receivable;
+    return $receivableOrders + $receivablePurchaseReturn;
+  }
+
+  private function payable($store_id, $branch_id, $begin, $end)
+  {
+    $payablePurchaseOrder = DB::table('purchase_orders')
+      ->where('purchase_orders.store_id', $store_id)
+      ->where('purchase_orders.branch_id', $branch_id)
+      ->where('purchase_orders.creation_date', '>=', $begin)
+      ->where('purchase_orders.creation_date', '<', $end)
+      ->selectRaw('COALESCE(SUM(purchase_orders.total_amount - purchase_orders.paid_amount),0) AS payable')
+      ->first()
+      ->payable;
+
+    $payableRefund = DB::table('refunds')
+      ->where('refunds.store_id', $store_id)
+      ->where('refunds.branch_id', $branch_id)
+      ->where('refunds.created_at', '>=', $begin)
+      ->where('refunds.created_at', '<', $end)
+      ->selectRaw('COALESCE(SUM(refunds.total_amount - refunds.paid_amount),0) AS payable')
+      ->first()
+      ->payable;
+    return $payablePurchaseOrder + $payableRefund;
+  }
+
+  private function purchase($store_id, $branch_id, $begin, $end)
   {
     $purchased_sheet = DB::table('purchase_orders')
       ->where('purchase_orders.store_id', $store_id)
+      ->where('purchase_orders.branch_id', $branch_id)
       ->where('purchase_orders.creation_date', '>=', $begin)
       ->where('purchase_orders.creation_date', '<', $end)
-      ->selectRaw('COALESCE(SUM(purchase_orders.total_amount - purchase_orders.discount),0) AS purchase')
-      ->first();
-    return $purchased_sheet->purchase;
+      ->leftJoin('purchase_order_details', 'purchase_order_details.purchase_order_id', '=', 'purchase_orders.id')
+      ->selectRaw('COALESCE(SUM((purchase_order_details.quantity - purchase_order_details.returned_quantity)*(purchase_order_details.unit_price)),0) AS total')
+      ->first()->total;
+    $discount =  DB::table('purchase_orders')
+      ->where('purchase_orders.store_id', $store_id)
+      ->where('purchase_orders.branch_id', $branch_id)
+      ->where('purchase_orders.creation_date', '>=', $begin)
+      ->where('purchase_orders.creation_date', '<', $end)
+      ->sum('discount');
+    return $purchased_sheet - $discount;
   }
 
   private function getBestSellingItem($store_id, $begin, $end, $order_by, $category_id, $limit, $is_group_by = true)
@@ -358,10 +428,10 @@ class StoreReportController extends Controller
 
 
     if ($begin) {
-      $item_list = $item_list->where('orders.created_at', '>=', $begin);
+      $item_list = $item_list->where('orders.creation_date', '>=', $begin);
     }
     if ($end) {
-      $item_list = $item_list->where('orders.created_at', '<', $end);
+      $item_list = $item_list->where('orders.creation_date', '<', $end);
     }
     if ($category_id) {
       $item_list = $item_list->where('products.category_id', $category_id);
@@ -383,10 +453,10 @@ class StoreReportController extends Controller
       ->orderByRaw("categories.id DESC");
 
     if ($begin) {
-      $item_list = $item_list->where('orders.created_at', '>=', $begin);
+      $item_list = $item_list->where('orders.creation_date', '>=', $begin);
     }
     if ($end) {
-      $item_list = $item_list->where('orders.created_at', '<', $end);
+      $item_list = $item_list->where('orders.creation_date', '<', $end);
     }
     return $item_list->get();
   }
@@ -400,16 +470,17 @@ class StoreReportController extends Controller
       ->orderByRaw("$order_by DESC");
 
     if ($begin) {
-      $customer_list = $customer_list->where('orders.created_at', '>=', $begin);
+      $customer_list = $customer_list->where('orders.creation_date', '>=', $begin);
     }
     if ($end) {
-      $customer_list = $customer_list->where('orders.created_at', '<', $end);
+      $customer_list = $customer_list->where('orders.creation_date', '<', $end);
     }
     return $customer_list->limit($limit)->get();
   }
 
   private function getTopSupplier($store_id, $begin, $end, $order_by, $limit)
   {
+    
     $supplier_list = DB::table('purchase_orders')->where('purchase_orders.store_id', $store_id)
       ->join('suppliers', 'suppliers.id', '=', 'purchase_orders.supplier_id')
       ->selectRaw('suppliers.name, SUM(purchase_orders.total_amount) AS total_purchase_price')
@@ -422,21 +493,30 @@ class StoreReportController extends Controller
     if ($end) {
       $supplier_list = $supplier_list->where('purchase_orders.creation_date', '<', $end);
     }
-    return $supplier_list->limit($limit)->get();
+    
+    if ($limit) {
+      return $supplier_list->limit($limit)->get();
+    } else {
+      return $supplier_list->get();
+    }
   }
 
   private function getTopEmployee($store_id, $begin, $end, $order_by, $limit) {
-    return $employee_sales =
+    $employee_sales =
       DB::table('orders')
       ->where('orders.store_id', $store_id)
       ->where('orders.created_user_type', 'employee')
       ->join('employees', 'orders.user_id', '=', 'employees.id')
       ->selectRaw('count(orders.id) as number_of_orders, sum(total_amount) as total_sale, employees.name, employees.id')
       ->groupBy('user_id')
-      ->where('orders.created_at', '>=', $begin)
-      ->where('orders.created_at', '<', $end)
-      ->orderByRaw("$order_by DESC")
-      ->limit($limit)
-      ->get();
+      ->where('orders.creation_date', '>=', $begin)
+      ->where('orders.creation_date', '<', $end)
+      ->orderByRaw("$order_by DESC");
+      
+      if ($limit) {
+        return $employee_sales->limit($limit)->get();
+      }
+      return  $employee_sales->get();
     }
+    
 }

@@ -86,23 +86,24 @@ class PromotionVoucherController extends Controller
 
         $promotions = DB::table('promotions')
             ->where('store_id', $store->id)
+            ->where('status', 'active')
             ->where(function ($query) use ($current_date) {
-                $query->where('start_date', '>=', $current_date)
+                $query->where('start_date', '<=', $current_date)
                     ->orWhere('start_date',  null);
             })
             ->where(function ($query) use ($current_date) {
-                $query->where('end_date', '<=', $current_date)
+                $query->where('end_date', '>=', $current_date)
                     ->orWhere('end_date',  null);
             })
-            ->where('status', 'active')->get();
+            ->get();
         $voucher = DB::table('vouchers')
             ->where('store_id', $store->id)
             ->where(function ($query) use ($current_date) {
-                $query->where('start_date', '>=', $current_date)
+                $query->where('start_date', '<=', $current_date)
                     ->orWhere('start_date',  null);
             })
             ->where(function ($query) use ($current_date) {
-                $query->where('end_date', '<=', $current_date)
+                $query->where('end_date', '>=', $current_date)
                     ->orWhere('end_date',  null);
             })
             ->where('status', 'active')->get();

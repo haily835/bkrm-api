@@ -248,8 +248,7 @@ class StoreController extends Controller
                 'inventory_checks.created_at as created_at',
                 'inventory_checks.created_user_type as user_type',
                 'inventory_checks.created_by as user_id',
-            )
-            ->get()->toArray();
+            )->get()->toArray();
 
         $inventoryChecks = array_map(function ($inventoryCheck) {
             return array_merge([
@@ -326,10 +325,51 @@ class StoreController extends Controller
             ->where('product_batches.quantity', '>=', 0)
             ->where(DB::raw('DATE_ADD(product_batches.expiry_date, INTERVAL -products.notification_period DAY)'), '<', $current_date)->get();
 
+        $storeConfig = json_decode($store['general_configuration'], true)['notifyDebt'];
+
+        $customers = $store->customers()->where('status', 'active')->get();
+        $customersData = [];
+        foreach($customers as $customer) {
+            $totalDebt = $store->orders()
+                ->where('orders.customer_id', $customer['id'])
+                ->whereRaw('total_amount - discount - paid_amount > 0')
+                ->selectRaw('SUM(total_amount - discount - paid_amount) as debt')->first()->debt;
+            
+            if ($storeConfig['checkDebtAmount']) {
+                if ($totalDebt < (double)$storeConfig['debtAmount']) {
+                    continue;
+                }
+            }
+            $debtOrder = null;
+            
+            if ($storeConfig['checkNumberOfDay']) {
+                $debtOrder = $store->orders()
+                    ->where('orders.customer_id', $customer['id'])
+                    ->whereRaw('total_amount - discount - paid_amount > 0')
+                    ->whereRaw('creation_date - ' . $current_date, '<', $storeConfig['numberOfDate'])
+                    ->selectRaw('orders.*, total_amount - discount - paid_amount as debt')
+                    ->orderBy('orders.creation_date', $storeConfig['typeDebtDay'] === 'firstDebt' ? 'asc' : 'desc')->first();
+
+                if (!$debtOrder) {
+                    continue;
+                }
+            }
+
+            if ($totalDebt || $debtOrder) {
+
+                array_push($customersData, array_merge($customer->toArray(), [
+                    'total_debt' => $totalDebt,
+                    'order' => $debtOrder,
+                ]));
+            }
+        }
         return response()->json([
             'data' => [
+                'storeConfig' => $storeConfig,
                 'out_of_stock_products' =>  $out_of_stock_products,
-                'out_of_date_batches' => $out_of_date_batches
+                'out_of_date_batches' => $out_of_date_batches,
+                'customers' => $customersData,
+                'config' => $storeConfig,
             ]
         ]);
     }

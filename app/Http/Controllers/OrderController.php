@@ -148,7 +148,7 @@ class OrderController extends Controller
                     continue;
                 }
     
-                if ($detail['selectedBatches']) {
+                if (array_key_exists('selectedBatches', $detail)) {
                     foreach ($detail['selectedBatches'] as $batch) {
                         $reducedBatch = DB::table('product_batches')
                             ->where('store_id', $store->id)
@@ -255,21 +255,22 @@ class OrderController extends Controller
             ]);
 
             $batches = [];
-
-            if ($detail['selectedBatches']) {
-                foreach ($detail['selectedBatches'] as $batch) {
-                    DB::table('product_batches')
-                        ->where('store_id', $store->id)
-                        ->where('branch_id', $branch->id)
-                        ->where('product_id', $product_id)
-                        ->where('id', $batch['id'])
-                        ->decrement('quantity', $batch['additional_quantity']);
-                    $result = DB::table('product_batches')
-                        ->where('id', $batch['id'])->first();
-                    if ($result) {
-                        $result = json_decode(json_encode($result), TRUE);
-                        $result = array_merge($result, ['is_new' => false, 'additional_quantity' => $batch['additional_quantity'], 'returned_quantity' => 0]);
-                        array_push($batches, $result);
+            if (array_key_exists('selected_batches', $detail)) {
+                if ($detail['selectedBatches']) {
+                    foreach ($detail['selectedBatches'] as $batch) {
+                        DB::table('product_batches')
+                            ->where('store_id', $store->id)
+                            ->where('branch_id', $branch->id)
+                            ->where('product_id', $product_id)
+                            ->where('id', $batch['id'])
+                            ->decrement('quantity', $batch['additional_quantity']);
+                        $result = DB::table('product_batches')
+                            ->where('id', $batch['id'])->first();
+                        if ($result) {
+                            $result = json_decode(json_encode($result), TRUE);
+                            $result = array_merge($result, ['is_new' => false, 'additional_quantity' => $batch['additional_quantity'], 'returned_quantity' => 0]);
+                            array_push($batches, $result);
+                        }
                     }
                 }
             }

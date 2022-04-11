@@ -81,8 +81,8 @@ Route::middleware(['auth:user,employee'])->group(function () {
     Route::post('/stores/{store:uuid}/sendEmail', [StoreController::class, 'sendEmail']);
 
     // routes for report of store
-    Route::get('/stores/{store:uuid}/report/overview', [StoreReportController::class, 'overview']);
-    Route::get('/stores/{store:uuid}/report/statistic', [StoreReportController::class, 'statistic']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/report/overview', [StoreReportController::class, 'overview']);
+    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/report/statistic', [StoreReportController::class, 'statistic']);
     Route::get('/stores/{store:uuid}/report/top', [StoreReportController::class, 'getTopOfStore']);
     Route::get('/stores/{store:uuid}/report/item', [StoreReportController::class, 'getReportItems']);
     Route::get('/stores/{store:uuid}/report/category', [StoreReportController::class, 'getReportCategories']);
