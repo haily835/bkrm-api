@@ -11,8 +11,7 @@ class CustomerOrder extends Model
 
     protected $guarded = [];
 
-    protected $hidden = [
-    ];
+    protected $hidden = [];
 
     protected $casts = [
         'created_at' => 'datetime:Y-m-d H:i:s',

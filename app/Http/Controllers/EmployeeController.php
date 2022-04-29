@@ -81,7 +81,7 @@ class EmployeeController extends Controller
             'address' => 'nullable|string',
             'permissions' => 'required|array',
             'branches' => 'required|array',
-            'image' => 'nullable'
+            'image' => 'nullable',
         ]);
 
         $imagePath = "";
@@ -90,7 +90,7 @@ class EmployeeController extends Controller
                 $imagePath = $fields['image']->store('employee-images', 'public');
                 $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
                 $sized_image->save();
-                $imagePath = 'http://103.163.118.100/bkrm-api/storage/app/public/' . $imagePath;
+                $imagePath = 'https://www.cuahangcuatoi.net/bkrm-api/storage/app/public/' . $imagePath;
             }
         }
 
@@ -113,7 +113,7 @@ class EmployeeController extends Controller
             'address' => $fields['address'],
             'store_id' => $store->id,
             'employee_code' => $employee_code,
-            'img_url' => $imagePath ? $imagePath : 'http://103.163.118.100/bkrm-api/storage/app/public/employee-images/employee-default.png',
+            'img_url' => $imagePath ? $imagePath : 'https://www.cuahangcuatoi.net/bkrm-api/storage/app/public/employee-default.png',
         ];
 
         $newEmployee = Employee::create($employee);
@@ -152,6 +152,7 @@ class EmployeeController extends Controller
             'image' => 'nullable',
             'status' => "nullable|string",
             'password' => 'nullable|string',
+            'customization' => 'nullable|string',
         ]);
 
         // delete all old permissions and branches
@@ -189,7 +190,7 @@ class EmployeeController extends Controller
             $imagePath = $fields['image']->store('employee-images', 'public');
             $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
             $sized_image->save();
-            $imagePath = 'http://103.163.118.100/bkrm-api/storage/app/public/' . $imagePath;
+            $imagePath = 'https://www.cuahangcuatoi.net/bkrm-api/storage/app/public/' . $imagePath;
             $employee->update(['img_url' => $imagePath]);
         }
 

@@ -41,11 +41,11 @@ class OrderController extends Controller
 
 
         if ($start_date) {
-            array_push($queries, ['orders.created_at', '>=', $start_date . ' 00:00:00']);
+            array_push($queries, ['orders.creation_date', '>=', $start_date . ' 00:00:00']);
         }
 
         if ($end_date) {
-            array_push($queries, ['orders.created_at', '<=', $end_date . ' 00:00:00']);
+            array_push($queries, ['orders.creation_date', '<=', $end_date . ' 23:59:00']);
         }
 
         if ($min_total_amount) {
@@ -65,11 +65,11 @@ class OrderController extends Controller
         }
 
         if ($status) {
-            array_push($queries, ['orders.status', '==', $status]);
+            array_push($queries, ['orders.status', '=', $status]);
         }
 
         if ($payment_method) {
-            array_push($queries, ['payment_method', '<=', $payment_method]);
+            array_push($queries, ['payment_method', '=', $payment_method]);
         }
 
         $database_query =  $branch->orders()
@@ -77,18 +77,26 @@ class OrderController extends Controller
             ->join('customers', 'orders.customer_id', '=', 'customers.id')
             ->join('branches', 'orders.branch_id', '=', 'branches.id')
             ->select('orders.*', 'customers.name as customer_name', 'branches.name as branch_name');
-
+        $details = OrderDetail::where('order_details.store_id', $store->id)
+            ->leftJoin('orders', 'orders.id', '=', 'order_details.order_id')
+            ->where($queries);
         if ($search_key) {
             $database_query->where(function ($query) use (&$search_key) {
                 $query->where('orders.order_code', $search_key)
                     ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
                     ->orWhere('customers.name', 'like', '%' . $search_key . '%');
             });
+            $details->where(function ($query) use (&$search_key) {
+                $query->where('orders.order_code', $search_key)
+                    ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
+                    ->orWhere('customers.name', 'like', '%' . $search_key . '%');
+            });
         }
-
-
-
+        
+        // $db_details = $db_details->rightJoin('order_details')->where('orders.id', );
         $total_rows = $database_query->get()->count();
+        $total_amount = $database_query->sum('total_amount');
+        $total_quantity = $details->sum('order_details.quantity');
 
         if ($limit) {
             $orders = $database_query
@@ -96,21 +104,28 @@ class OrderController extends Controller
                 ->offset($limit * $page)
                 ->limit($limit)
                 ->get();
-
         } else {
             $orders = $database_query
                 ->orderBy($order_by, $sort)
                 ->get();
         }
 
+        $order_with_total_amount = [];
+        foreach($orders as $order) {
+            $order_total_amount = OrderDetail::where('order_id', $order->id)->sum('quantity');
+            array_push($order_with_total_amount, array_merge($order->toArray(), ['total_quantity' => $order_total_amount]));
+        }
+
         return response()->json([
-            'data' => $orders,
+            'data' => $order_with_total_amount,
             'total_rows' => $total_rows,
+            'query' => $queries,
+            'total_amount' => $total_amount,
+            'total_quantity' => $total_quantity
         ], 200);
     }
 
-    public function addOrder(Request $request, Store $store, Branch $branch)
-    {
+    public function addOrder(Request $request, Store $store, Branch $branch) {
         $validated = $request->validate([
             'customer_uuid' => 'nullable|string',
             'paid_date' => 'nullable|date_format:Y-m-d H:i:s',
@@ -130,8 +145,8 @@ class OrderController extends Controller
         ]);
 
         $isManageInventoryEnable = json_decode($store['general_configuration'], true)['inventory']['status'];
-
-        if ($isManageInventoryEnable) {
+        $canSellWhenNegativeQuantity = json_decode($store['general_configuration'], true)['canSellWhenNegativeQuantity']['status'];
+        if ($isManageInventoryEnable && !$canSellWhenNegativeQuantity) {
             $errorDetails = [];
             foreach ($validated['details'] as $detail) {
                 $product_id = $store->products->where('uuid', '=', $detail['uuid'])->first()->id;
@@ -188,6 +203,7 @@ class OrderController extends Controller
             ], 401);
         }
 
+        # customer 
         if ($validated['is_customer_order']) {
             $newCustomer = json_decode($validated['new_customer'], true);
 
@@ -211,7 +227,18 @@ class OrderController extends Controller
                 $customer_id = $customer->id;
             }
         } else if ($validated['customer_uuid'] === null) {
-            $customer_id = $store->customers()->where('type', 'default')->first()->id;
+            $customer = $store->customers()->where('type', 'default')->first();
+            if ($customer) {
+                $customer_id = $customer->id;
+            } else {
+                $customer = Customer::create([
+                    "uuid" => (string) Str::uuid(),
+                    "name" => "Khách hàng lẻ",
+                    "store_id" => $store->id,
+                    "type" => "default"
+                ]);
+                $customer_id = $customer->id;
+            }
         } else {
             $store->customers()->where('uuid', $validated['customer_uuid'])->increment('points', $validated['points']);
             $customer_id = $store->customers()->where('uuid', $validated['customer_uuid'])->first()->id;
@@ -255,7 +282,7 @@ class OrderController extends Controller
             ]);
 
             $batches = [];
-            if (array_key_exists('selected_batches', $detail)) {
+            if (array_key_exists('selectedBatches', $detail)) {
                 if ($detail['selectedBatches']) {
                     foreach ($detail['selectedBatches'] as $batch) {
                         DB::table('product_batches')
@@ -344,8 +371,7 @@ class OrderController extends Controller
         ], 200);
     }
 
-    public function show(Store $store, Order $order)
-    {
+    public function show(Store $store, Order $order) {
         $details = $order->orderDetails()
             ->join('products', 'order_details.product_id', '=', 'products.id')
             ->select('order_details.*', 'products.name', 'products.bar_code', 'products.product_code')->get();
@@ -390,10 +416,52 @@ class OrderController extends Controller
 
     public function destroy(Store $store, Branch $branch, Order $order)
     {
-        $isDeleted = Order::destroy($order->id);
+        $details = OrderDetail::where('order_id', $order->id)->get()->toArray();
+
+        foreach ($details as $detail) {
+            $product_id = $detail['product_id'];
+
+            $batches = json_decode($detail['batches']);
+            foreach ( $batches as $batch) {
+                DB::table('product_batches')
+                    ->where('store_id', $store->id)
+                    ->where('branch_id', $branch->id)
+                    ->where('product_id', $product_id)
+                    ->where('id', $batch['id'])
+                    ->increment('quantity', $batch['additional_quantity']);
+            }
+
+            // update branch inventory table
+            $productOfStore = BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])->first();
+
+            if ($productOfStore) {
+                BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])
+                    ->increment('quantity_available', $detail['quantity']);
+            } else {
+                BranchInventory::create([
+                    'store_id' => $store->id,
+                    'branch_id' => $branch->id,
+                    'product_id' => $product_id,
+                    'quantity_available' => $detail['quantity'],
+                ]);
+            }
+        }
+        Order::destroy($order->id);
+        OrderDetail::where('order_id', $order->id)->delete();
         return response()->json([
-            'message' => $isDeleted,
-            'data' => $order,
+            'message' => 'Order deleted successfully',
+            'data' => [
+                'order' => $order,
+            ]
+        ], 200);
+    }
+
+    public function deleteAll(Store $store, Branch $branch)
+    {
+        $branch->orders()->delete();
+        OrderDetail::where('branch_id', $branch->id)->delete();
+        return response()->json([
+            'message' => 'All Order deleted successfully',
         ], 200);
     }
 }

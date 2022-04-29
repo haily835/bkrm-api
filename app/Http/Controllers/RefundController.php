@@ -36,7 +36,7 @@ class RefundController extends Controller
         $validated = $request->validate([
             'order_uuid' => 'required|string',
             'customer_id' => 'required|numeric',
-            'paid_amount' => 'required|string',
+            'paid_amount' => 'required|numeric',
             'payment_method' => 'required|string',
             'total_amount' => 'required|string',
             'status' => 'required|string',
@@ -192,12 +192,17 @@ class RefundController extends Controller
 
 
         if ($status) {
-            array_push($queries, ['refunds.status', '==', $status]);
+            array_push($queries, ['refunds.status', '=', $status]);
         }
 
         if ($payment_method) {
-            array_push($queries, ['payment_method', '==', $payment_method]);
+            array_push($queries, ['refunds.payment_method', '=', $payment_method]);
         }
+
+        $details = RefundDetail::where('refund_details.store_id', $store->id)
+            ->leftJoin('refunds', 'refunds.id', '=', 'refund_details.refund_id')
+            ->where($queries);
+
 
         $database_query = $branch->refunds()
             ->where($queries)
@@ -214,8 +219,19 @@ class RefundController extends Controller
                         ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
                         ->orWhere('order_id', '=', $order->id);
                 });
+                $details->where(function ($query) use (&$search_key, &$order) {
+                    $query->where('refunds.refund_code', $search_key)
+                        ->orWhere('customers.name', 'like', '%' . $search_key . '%')
+                        ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
+                        ->orWhere('order_id', '=', $order->id);
+                });
             } else {
                 $database_query->where(function ($query) use (&$search_key) {
+                    $query->where('refunds.refund_code', $search_key)
+                        ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
+                        ->orWhere('customers.name', 'like', '%' . $search_key . '%');
+                });
+                $details->where(function ($query) use (&$search_key) {
                     $query->where('refunds.refund_code', $search_key)
                         ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
                         ->orWhere('customers.name', 'like', '%' . $search_key . '%');
@@ -224,6 +240,8 @@ class RefundController extends Controller
         }
 
         $total_rows = $database_query->get()->count();
+        $total_amount = $database_query->sum('total_amount');
+        $total_quantity = $details->sum('refund_details.quantity');
 
         if ($limit) {
             $refunds = $database_query
@@ -237,9 +255,17 @@ class RefundController extends Controller
                 ->get();
         }
 
+        $refund_with_total_amount = [];
+        foreach($refunds as $refund) {
+            $refund_total_amount = RefundDetail::where('refund_id', $refund->id)->sum('quantity');
+            array_push($refund_with_total_amount, array_merge($refund->toArray(), ['total_quantity' => $refund_total_amount]));
+        }
+
         return response()->json([
-            'data' => $refunds,
+            'data' => $refund_with_total_amount,
             'total_rows' => $total_rows,
+            'total_amount' => $total_amount,
+            'total_quantity' => $total_quantity,
         ], 200);
     }
 
@@ -320,10 +346,36 @@ class RefundController extends Controller
 
     public function destroy(Store $store, Branch $branch, Refund $refund)
     {
-        $isdeleted = Refund::destroy($refund->id);
+        $details = RefundDetail::where('refund_id', $refund->id)->get()->toArray();
+
+        foreach ($details as $detail) {
+            $product_id = $detail['product_id'];
+
+            $batches = json_decode($detail['batches']);
+            foreach ( $batches as $batch) {
+                DB::table('product_batches')
+                    ->where('store_id', $store->id)
+                    ->where('branch_id', $branch->id)
+                    ->where('product_id', $product_id)
+                    ->where('id', $batch['id'])
+                    ->decrement('quantity', $batch['returned_quantity']);
+            }
+
+            // update branch inventory table
+            $productOfStore = BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])->first();
+
+            if ($productOfStore) {
+                BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])
+                    ->decrement('quantity_available', $detail['quantity']);
+            }
+        }
+        Refund::destroy($refund->id);
+        RefundDetail::where('refund_id', $refund->id)->delete();
         return response()->json([
-            'message' => $isdeleted,
-            'data' => $refund
+            'message' => 'deleted successfully',
+            'data' => [
+                'refund' => $refund,
+            ]
         ], 200);
     }
 }

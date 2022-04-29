@@ -79,10 +79,11 @@ Route::middleware(['auth:user,employee'])->group(function () {
     Route::get('/stores/{store:uuid}/branches/{branch:uuid}/activities', [StoreController::class, 'activities']);
     Route::post('/stores/{store:uuid}/updateStoreConfiguration', [StoreController::class, 'updateStoreConfiguration']);
     Route::post('/stores/{store:uuid}/sendEmail', [StoreController::class, 'sendEmail']);
+    Route::post('/stores/{store:uuid}/deleteAllTransactions', [StoreController::class, 'deleteAllTransactions']);
 
     // routes for report of store
-    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/report/overview', [StoreReportController::class, 'overview']);
-    Route::get('/stores/{store:uuid}/branches/{branch:uuid}/report/statistic', [StoreReportController::class, 'statistic']);
+    Route::get('/stores/{store:uuid}/report/overview', [StoreReportController::class, 'overview']);
+    Route::get('/stores/{store:uuid}/report/statistic', [StoreReportController::class, 'statistic']);
     Route::get('/stores/{store:uuid}/report/top', [StoreReportController::class, 'getTopOfStore']);
     Route::get('/stores/{store:uuid}/report/item', [StoreReportController::class, 'getReportItems']);
     Route::get('/stores/{store:uuid}/report/category', [StoreReportController::class, 'getReportCategories']);
@@ -150,6 +151,7 @@ Route::middleware(['auth:user,employee'])->group(function () {
     Route::post('/stores/{store:uuid}/branches/{branch:uuid}/orders/addOrder', [OrderController::class, 'addOrder']);
     Route::get('/stores/{store:uuid}/orders/{order:uuid}', [OrderController::class, 'show']);
     Route::put('/stores/{store:uuid}/branches/{branch:uuid}/orders/{order:uuid}', [OrderController::class, 'update']);
+    Route::delete('/stores/{store:uuid}/branches/{branch:uuid}/orders/deleteAll', [OrderController::class, 'deleteAll']);
     Route::delete('/stores/{store:uuid}/branches/{branch:uuid}/orders/{order:uuid}', [OrderController::class, 'destroy']);
 
     // routes for refunds
@@ -181,12 +183,15 @@ Route::middleware(['auth:user,employee'])->group(function () {
     Route::get('/stores/{store:uuid}/suppliers', [SupplierController::class, 'index']);
     Route::post('/stores/{store:uuid}/suppliers', [SupplierController::class, 'store']);
     Route::get('/stores/{store:uuid}/suppliers/{supplier:uuid}', [SupplierController::class, 'show']);
+    Route::put('/stores/{store:uuid}/suppliers/{supplier:uuid}/payDebt', [SupplierController::class, 'payDebt']);
     Route::post('/stores/{store:uuid}/suppliers/{supplier:uuid}', [SupplierController::class, 'update']);
     Route::delete('/stores/{store:uuid}/suppliers/{supplier:uuid}', [SupplierController::class, 'destroy']);
 
     Route::get('/stores/{store:uuid}/customers', [CustomerController::class, 'index']);
-    Route::post('/stores/{store:uuid}/customers/addCustomersByJson', [ProductController::class, 'addCustomersByJson']);
+    Route::post('/stores/{store:uuid}/customers/addCustomersByJson', [CustomerController::class, 'addCustomersByJson']);
     Route::post('/stores/{store:uuid}/customers', [CustomerController::class, 'store']);
+    Route::put('/stores/{store:uuid}/customers/{customer:uuid}/payDebt', [CustomerController::class, 'payDebt']);
+    Route::get('/stores/{store:uuid}/customerDebts', [CustomerController::class, 'customerDebts']);
     Route::get('/stores/{store:uuid}/customers/{customer:uuid}', [CustomerController::class, 'show']);
     Route::put('/stores/{store:uuid}/customers/{customer:uuid}', [CustomerController::class, 'update']);
     Route::delete('/stores/{store:uuid}/customers/{customer:uuid}', [CustomerController::class, 'destroy']);

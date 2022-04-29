@@ -34,11 +34,8 @@ class PurchaseOrderController extends Controller
         $order_by = $request->query('orderBy');
         $sort = $request->query('sort');
 
-
         // set up query
         $queries = [];
-
-
         if ($start_date) {
             array_push($queries, ['purchase_orders.creation_date', '>=', $start_date]);
         }
@@ -64,12 +61,16 @@ class PurchaseOrderController extends Controller
         }
 
         if ($status) {
-            array_push($queries, ['purchase_orders.status', '==', $status]);
+            array_push($queries, ['purchase_orders.status', '=', $status]);
         }
 
         if ($payment_method) {
             array_push($queries, ['purchase_orders.payment_method', '<=', $payment_method]);
         }
+
+        $details = PurchaseOrderDetail::where('purchase_order_details.store_id', $store->id)
+            ->leftJoin('purchase_orders', 'purchase_orders.id', '=', 'purchase_order_details.purchase_order_id')
+            ->where($queries);
 
         $database_query = $branch->purchaseOrders()
             ->where($queries)
@@ -83,9 +84,16 @@ class PurchaseOrderController extends Controller
                     ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
                     ->orWhere('suppliers.name', 'like', '%' . $search_key . '%');
             });
+            $details->where(function ($query) use (&$search_key) {
+                $query->where('purchase_orders.purchase_order_code', $search_key)
+                    ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
+                    ->orWhere('suppliers.name', 'like', '%' . $search_key . '%');
+            });
         }
 
         $total_rows = $database_query->get()->count();
+        $total_amount = $database_query->sum('total_amount');
+        $total_quantity = $details->sum('purchase_order_details.quantity');
 
         if ($limit) {
             $purchaseOrders = $database_query
@@ -99,10 +107,17 @@ class PurchaseOrderController extends Controller
                 ->get();
         }
 
+        $purchase_order_with_total_amount = [];
+        foreach($purchaseOrders as $purchaseOrder) {
+            $purchase_order_total_amount = PurchaseOrderDetail::where('purchase_order_id', $purchaseOrder->id)->sum('quantity');
+            array_push($purchase_order_with_total_amount, array_merge($purchaseOrder->toArray(), ['total_quantity' => $purchase_order_total_amount]));
+        }
 
         return response()->json([
-            'data' => $purchaseOrders,
-            'total_rows' => $total_rows
+            'data' => $purchase_order_with_total_amount,
+            'total_rows' => $total_rows,
+            'total_amount' => $total_amount,
+            'total_quantity' => $total_quantity
         ], 200);
     }
 
@@ -312,7 +327,6 @@ class PurchaseOrderController extends Controller
         ], 200);
     }
 
-
     public function update(Request $request, Store $store, Branch $branch, PurchaseOrder $purchaseOrder)
     {
         $validated = $request->validate([
@@ -359,10 +373,45 @@ class PurchaseOrderController extends Controller
 
     public function destroy(Store $store, Branch $branch, PurchaseOrder $purchaseOrder)
     {
-        $isdelected = PurchaseOrder::destroy($purchaseOrder->id);
+        $details = PurchaseOrderDetail::where('purchase_order_id', $purchaseOrder->id)->get()->toArray();
+
+        foreach ($details as $detail) {
+            $product_id = $detail['product_id'];
+
+            $batches = json_decode($detail['batches']);
+            foreach ( $batches as $batch) {
+                DB::table('product_batches')
+                    ->where('store_id', $store->id)
+                    ->where('branch_id', $branch->id)
+                    ->where('product_id', $product_id)
+                    ->where('id', $batch['id'])
+                    ->decrement('quantity', $batch['additional_quantity']);
+            }
+
+            // update branch inventory table
+            $productOfStore = BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])->first();
+
+            if ($productOfStore) {
+                BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])
+                    ->decrement('quantity_available', $detail['quantity']);
+            }
+        }
+        PurchaseOrder::destroy($purchaseOrder->id);
+        PurchaseOrderDetail::where('purchase_order_id', $purchaseOrder->id)->delete();
         return response()->json([
-            'message' => $isdelected,
-            'data' => $purchaseOrder,
+            'message' => 'deleted successfully',
+            'data' => [
+                'purchase_order' => $purchaseOrder,
+            ]
+        ], 200);
+    }
+
+    public function deleteAll(Store $store, Branch $branch)
+    {
+        $branch->purchaseOrders()->delete();
+        PurchaseOrderDetail::where('branch_id', $branch->id)->delete();
+        return response()->json([
+            'message' => 'All Order deleted successfully',
         ], 200);
     }
 }

@@ -71,6 +71,7 @@ class AuthController extends Controller
             'phone' => $fields['store_phone'],
             'status' => 'active',
             'image' => 'http://103.163.118.100/bkrm-api/storage/app/public/store-images/store-default.png',
+            'general_configuration' => '{"inventory":{"status":false},"recommendedProduct":{"status":false},"variation":{"status":true},"expiryDate":{"status":false},"customerScore":{"status":false,"value":10000,"exceptDiscountProduct":false,"exceptDiscountInvoice":false,"exceptVoucher":false},"email":{"status":false,"emailAddress":"","password":""},"notifyDebt":{"status":false,"checkDebtAmount":true,"debtAmount":"500000","checkNumberOfDay":false,"numberOfDay":"15","typeDebtDay":"firstDebt","canNotContinueBuy":false,"canNotContinueDebt":false},"returnLimit":{"status":false,"day":7},"canFixPriceSell":{"status":true,"cart":false,"import":true,"returnCart":true,"returnImport":true},"printReceiptWhenSell":{"status":true,"cart":true,"import":false,"returnCart":false,"returnImport":false,"order":false,"checkInventroy":false},"alowDebt":{"status":true},"canSellWhenNegativeQuantity":{"status":true},"canEnterDiscountWhenSell":{"status":true},"discount":{"status":false,"applyMultiple":false,"applyOnline":true},"voucher":{"status":false},"delivery":{"status":false},"vat":{"status":false,"listCost":[{"key":"1","costName":"","value":0,"type":"%"}]},"orderLowStock":{"status":false,"choiceQuantity":"select","selectQuantity":"latest","inputQuantity":10,"noHistoryQuantity":10,"selectSuplier":"latest"},"autoApplyDiscount":{"status":false}}'
         ]);
 
         if ($fields['default_branch']) {
@@ -213,7 +214,10 @@ class AuthController extends Controller
             'token_type' => 'bearer',
             'expires_in' => auth()->factory()->getTTL() * 60,
             'user' => $user,
-            'store' => array_merge($store->toArray(), ['branches' => $branches]),
+            'store' => array_merge($store->toArray(), [
+                'branches' => $branches,
+                'key' => 'AIzaSyDNzJMybCvn16gHHlj_A-8xgrA5gKvads0',
+            ]),
             'role' => 'owner'
         ]);
     }
@@ -236,7 +240,10 @@ class AuthController extends Controller
 
         return response()->json([
             'access_token' => $token,
-            'store' => array_merge($store->toArray(), ['branches' => $branches]),
+            'store' => array_merge($store->toArray(), [
+                'branches' => $branches,
+                'key' => 'AIzaSyDNzJMybCvn16gHHlj_A-8xgrA5gKvads0',
+            ]),
             'token_type' => 'bearer',
             'expires_in' => auth()->factory()->getTTL() * 60,
             'user' => Auth::guard('employee')->user(),
@@ -257,7 +264,10 @@ class AuthController extends Controller
             $branches = Branch::where('store_id', $store->id)->where('status', 'active')->get();
             return response()->json([
                 'user' => $user,
-                'store' => array_merge($store->toArray(), ['branches' => $branches]),
+                'store' => array_merge($store->toArray(), [
+                    'branches' => $branches,
+                    'key' => 'AIzaSyDNzJMybCvn16gHHlj_A-8xgrA5gKvads0',
+                ]),
                 'role' => 'owner',
                 'data' => $request->header()
             ]);
@@ -267,7 +277,10 @@ class AuthController extends Controller
             $branches = Branch::where('store_id', $store->id)->where('status', 'active')->get();
             return response()->json([
                 'user' => Auth::guard('employee')->user(),
-                'store' => array_merge($store->toArray(), ['branches' => $branches]),
+                'store' => array_merge($store->toArray(), [
+                    'branches' => $branches,
+                    'key' => 'AIzaSyDNzJMybCvn16gHHlj_A-8xgrA5gKvads0',
+                ]),
                 'role' => 'employee',
                 'permission' => $user->priviledges,
                 'data' => $request->header()
@@ -300,6 +313,7 @@ class AuthController extends Controller
             'role' => 'required|string',
             'id_card_number' => 'nullable|string',
             'address' => 'nullable|string',
+            'customization' => 'nullable|string',
             'image' => 'nullable',
         ]);
 

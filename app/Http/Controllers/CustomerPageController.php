@@ -21,6 +21,12 @@ class CustomerPageController extends Controller
     {
         $store_web_page = $request->query('store_web_page');
         $store = Store::where('web_page', $store_web_page)->first();
+        $isActive = json_decode($store['web_configuration'], true)['status'];
+
+        if ($isActive === "inactive") {
+            return response()->json(['data' => 'Inactive web'], 400);
+        }
+
         $branches = $store->branches()->where('status', 'active')->get()->toArray();
 
         return response()->json(['data' => array_merge($store->toArray(),['branches' => $branches])]);
@@ -32,6 +38,12 @@ class CustomerPageController extends Controller
         // $page = $request->query("page") ? $request->query("page") : 1;
 
         // $productQuery = $store->products()->where('status', 'active');
+        $isActive = json_decode($store['web_configuration'], true)['status'];
+        if ($isActive === "inactive") {
+            return response()->json(['data' => 'Inactive web'], 400);
+        }
+
+
         $total_row = $store->products()->where([
             ['status', '<>', 'inactive'],
             ['status', '<>', 'deleted'],

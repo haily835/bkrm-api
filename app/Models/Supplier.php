@@ -11,7 +11,6 @@ class Supplier extends Model
     protected $guarded = [];
    
     protected $hidden = [
-        'id',
         'store_id'
     ];
 }

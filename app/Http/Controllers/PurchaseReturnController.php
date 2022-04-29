@@ -67,6 +67,10 @@ class PurchaseReturnController extends Controller
             array_push($queries, ['purchase_returns.payment_method', '<=', $payment_method]);
         }
 
+        $details = PurchaseReturnDetail::where('purchase_return_details.store_id', $store->id)
+            ->leftJoin('purchase_returns', 'purchase_returns.id', '=', 'purchase_return_details.purchase_return_id')
+            ->where($queries);
+
         $database_query = $branch->purchaseReturns()
             ->where($queries)
             ->join('suppliers', 'purchase_returns.supplier_id', '=', 'suppliers.id')
@@ -82,8 +86,19 @@ class PurchaseReturnController extends Controller
                         ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
                         ->orWhere('purchase_order_id', '=', $purchase_order->id);
                 });
+                $details->where(function ($query) use (&$search_key, &$purchase_order) {
+                    $query->where('purchase_returns.purchase_return_code', $search_key)
+                        ->orWhere('suppliers.name', 'like', '%' . $search_key . '%')
+                        ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
+                        ->orWhere('purchase_order_id', '=', $purchase_order->id);
+                });
             } else {
                 $database_query->where(function ($query) use (&$search_key) {
+                    $query->where('purchase_returns.purchase_return_code', $search_key)
+                        ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
+                        ->orWhere('suppliers.name', 'like', '%' . $search_key . '%');
+                });
+                $details->where(function ($query) use (&$search_key) {
                     $query->where('purchase_returns.purchase_return_code', $search_key)
                         ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
                         ->orWhere('suppliers.name', 'like', '%' . $search_key . '%');
@@ -92,6 +107,8 @@ class PurchaseReturnController extends Controller
         }
 
         $total_rows = $database_query->get()->count();
+        $total_amount = $database_query->sum('total_amount');
+        $total_quantity = $details->sum('purchase_return_details.quantity');
 
         if ($limit) {
             $purchaseReturns = $database_query
@@ -105,9 +122,17 @@ class PurchaseReturnController extends Controller
                 ->get();
         }
 
+        $purchase_return_with_total_amount = [];
+        foreach($purchaseReturns as $purchaseReturn) {
+            $purchase_return_total_amount = PurchaseReturnDetail::where('purchase_return_id', $purchaseReturn->id)->sum('quantity');
+            array_push($purchase_return_with_total_amount, array_merge($purchaseReturn->toArray(), ['total_quantity' => $purchase_return_total_amount]));
+        }
+
         return response()->json([
-            'data' => $purchaseReturns,
-            'total_rows' => $total_rows
+            'data' => $purchase_return_with_total_amount,
+            'total_rows' => $total_rows,
+            'total_amount' => $total_amount,
+            'total_quantity' => $total_quantity,
         ], 200);
     }
 
@@ -332,10 +357,36 @@ class PurchaseReturnController extends Controller
 
     public function destroy(Store $store, Branch $branch, PurchaseReturn $purchaseReturn)
     {
-        $isdeleted = PurchaseReturn::destroy($purchaseReturn);
+        $details = PurchaseReturnDetail::where('purchase_return_id', $purchaseReturn->id)->get()->toArray();
+
+        foreach ($details as $detail) {
+            $product_id = $detail['product_id'];
+
+            $batches = json_decode($detail['batches']);
+            foreach ( $batches as $batch) {
+                DB::table('product_batches')
+                    ->where('store_id', $store->id)
+                    ->where('branch_id', $branch->id)
+                    ->where('product_id', $product_id)
+                    ->where('id', $batch['id'])
+                    ->increment('quantity', $batch['returned_quantity']);
+            }
+
+            // update branch inventory table
+            $productOfStore = BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])->first();
+
+            if ($productOfStore) {
+                BranchInventory::where([['branch_id', '=', $branch->id], ['product_id', '=', $product_id]])
+                    ->increment('quantity_available', $detail['quantity']);
+            }
+        }
+        PurchaseReturn::destroy($purchaseReturn->id);
+        PurchaseReturnDetail::where('purchase_return_id', $purchaseReturn->id)->delete();
         return response()->json([
-            'message' => $isdeleted,
-            'data' => $purchaseReturn
+            'message' => 'deleted successfully',
+            'data' => [
+                'purchase_return' => $purchaseReturn,
+            ]
         ], 200);
     }
 }

@@ -18,9 +18,9 @@ class SupplierController extends Controller
         $page = $request->query('page');
 
         $db_query =$store->suppliers()
-        ->where('type', '<>', 'default')
-        ->where('status', '<>', 'deleted')
-        ->orderBy('created_at', 'desc');
+            ->where('type', '<>', 'default')
+            ->where('status', '<>', 'deleted')
+            ->orderBy('created_at', 'desc');
 
 
         if ($search_key) {
@@ -162,5 +162,30 @@ class SupplierController extends Controller
             'message' => 1,
             'data' => $numOfSupplier
         ], 200);
+    }
+    public function payDebt(Request $request, Store $store, Supplier $supplier) {
+        $validated = $request->validate(['paid_amount' => 'numeric|required']);
+        $paid_amount = $validated['paid_amount'];
+        
+        $orders = $store->purchaseOrders()
+            ->where('supplier_id', '=',$supplier->id)
+            ->whereRaw('purchase_orders.total_amount - purchase_orders.discount - purchase_orders.paid_amount > 0')
+            ->orderBy('creation_date', 'asc')
+            ->get()->toArray();
+        $numberOfOrders = count($orders);
+        $index = 0;
+        while($paid_amount >= 0 && $index < $numberOfOrders) {
+            $debt_amount = $orders[$index]['total_amount'] - $orders[$index]['discount'] -  $orders[$index]['paid_amount'];
+            $order_id = $orders[$index]['id'];
+            if ($paid_amount >= $debt_amount) {
+                $store->purchaseOrders()->where('id', $order_id)->increment('paid_amount', $debt_amount);
+                $paid_amount = $paid_amount - $debt_amount;
+            } else {
+                $store->purchaseOrders()->where('id', $order_id)->increment('paid_amount', $paid_amount);
+                $paid_amount = 0;
+            }
+            $index += 1;
+        }
+        return response()->json(['status' => $numberOfOrders, 'supplier' => $supplier]);
     }
 }

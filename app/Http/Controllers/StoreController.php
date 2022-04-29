@@ -7,6 +7,7 @@ use App\Models\Store;
 use App\Models\Employee;
 use App\Models\User;
 use App\Models\Branch;
+use App\Models\InventoryCheckDetail;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use Intervention\Image\Facades\Image;
@@ -14,6 +15,11 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Auth;
 use DateTime;
+use Exception;
+use App\Models\OrderDetail;
+use App\Models\PurchaseOrderDetail;
+use App\Models\PurchaseReturnDetail;
+use App\Models\RefundDetail;
 use Illuminate\Support\Facades\DB;
 
 class StoreController extends Controller
@@ -44,7 +50,7 @@ class StoreController extends Controller
 
         if ($request['image']) {
             $imagePath = $request['image']->store('store-images', 'public');
-            $data['image'] = 'http://103.163.118.100/bkrm-api/storage/app/public/' . $imagePath;
+            $data['image'] = 'https://www.cuahangcuatoi.net/bkrm-api/storage/app/public/' . $imagePath;
         } else {
             $data['image'] = 'http://103.163.118.100/bkrm-api/storage/app/public/store-images/store-default.png';
         }
@@ -96,7 +102,7 @@ class StoreController extends Controller
             if ($data['images'] != null) {
                 foreach ($data['images'] as $image) {
                     $imagePath = $image->store('store-images', 'public');
-                    $imageUrl = 'http://103.163.118.100/bkrm-api/storage/app/public/'
+                    $imageUrl = 'https://www.cuahangcuatoi.net/bkrm-api/storage/app/public/'
                         . $imagePath;
                     array_push($banners, $imageUrl);
                 }
@@ -132,7 +138,7 @@ class StoreController extends Controller
                 $imagePath = $data['image']->store('store-images', 'public');
                 $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
                 $sized_image->save();
-                $imagePath = 'http://103.163.118.100/bkrm-api/storage/app/public/' . $imagePath;
+                $imagePath = 'https://www.cuahangcuatoi.net/bkrm-api/storage/app/public/' . $imagePath;
             }
         }
 
@@ -287,27 +293,42 @@ class StoreController extends Controller
     }
 
     public function sendEmail(Request $request, Store $store)
-    {
-        $email_configuration = json_decode($store->email_configuration, true);
-        if (!is_null($email_configuration)) {
-            $config = array(
-                'driver'     =>     'smtp',
-                'host'       =>     'smtp.gmail.com',
-                'port'       =>     587,
-                'username'   =>     $email_configuration['username'],
-                'password'   =>     $email_configuration['password'],
-                'encryption' =>     'tls',
-                'from'       =>     array('address' => $email_configuration['username'], 'name' => $store->name)
-            );
-            Config::set('mail', $config);
+    {   
+        try {
+            $email_configuration = json_decode($store->email_configuration, true);
+            if (!is_null($email_configuration)) {
+                $config = array(
+                    'driver'     =>     'smtp',
+                    'host'       =>     'smtp.gmail.com',
+                    'port'       =>     587,
+                    'username'   =>     $email_configuration['username'],
+                    'password'   =>     $email_configuration['password'],
+                    'encryption' =>     'tls',
+                    'from'       =>     array('address' => $email_configuration['username'], 'name' => $store->name)
+                );
+                Config::set('mail', $config);
+            }
+    
+           
+            $validated = $request->validate([
+                'subject' => 'required|string',
+                'email' => 'required|string',
+                'name' => 'required|string',
+                'content' => 'required|string'
+            ]);
+            Mail::send(new StoreEmail($validated));
+
+            return response()->json([
+                'data' => 'Send successfully'
+            ], 200);
+
+        } catch (Exception $e) {
+            return response()->json([
+                'data' => 'Send erro'
+            ], 200);
         }
-        $validated = $request->validate([
-            'subject' => 'required|string',
-            'email' => 'required|string',
-            'name' => 'required|string',
-            'content' => 'required|string'
-        ]);
-        Mail::send(new StoreEmail($validated));
+
+
     }
 
     public function getNotification(Request $request, Store $store, Branch $branch) {
@@ -356,7 +377,6 @@ class StoreController extends Controller
             }
 
             if ($totalDebt || $debtOrder) {
-
                 array_push($customersData, array_merge($customer->toArray(), [
                     'total_debt' => $totalDebt,
                     'order' => $debtOrder,
@@ -372,5 +392,91 @@ class StoreController extends Controller
                 'config' => $storeConfig,
             ]
         ]);
+    }
+
+    public function deleteAllTransactions(Request $request, Store $store) {
+        $validated = $request->validate([
+            'from' => 'required|string',
+            'to' => 'required|string',
+            'isAll' => 'required|boolean',
+        ]);
+
+        $from = $validated['from'] . ' 00:00:00';
+        $to = $validated['to'] . ' 23:59:59';
+
+        $deleted = [
+            'orders' => [],
+            'refunds' => [],
+            'purchase_orders' => [],
+            'purchase_returns' => [],
+            'inventory_checks' => [],
+        ];
+
+        if ($validated['isAll']) {
+            $store->orders()->delete();
+            OrderDetail::where('branch_id', $store->id)->delete();
+    
+            $store->purchaseOrders()->delete();
+            PurchaseOrderDetail::where('store_id', $store->id)->delete();
+    
+            $store->purchaseReturns()->delete();
+            PurchaseReturnDetail::where('store_id', $store->id)->delete();
+    
+            $store->refunds()->delete();
+            RefundDetail::where('store_id', $store->id)->delete();
+    
+            $store->inventoryChecks()->delete();
+            InventoryCheckDetail::where('store_id', $store->id)->delete();
+        } else {
+            $store->orders()
+                ->where('creation_date', '>=', $from)
+                ->where('creation_date', '<=', $to)
+                ->delete();
+            OrderDetail::where('branch_id', $store->id)
+                ->where('created_at', '>=', $from)
+                ->where('created_at', '<=', $to)
+                ->delete();
+    
+            $store->purchaseOrders()
+                ->where('creation_date', '>=', $from)
+                ->where('creation_date', '<=', $to)
+                ->delete();
+            PurchaseOrderDetail::where('store_id', $store->id)
+                ->where('created_at', '>=', $from)
+                ->where('created_at', '<=', $to)
+                ->delete();
+    
+            $store->purchaseReturns()
+                ->where('creation_date', '>=', $from)
+                ->where('creation_date', '<=', $to)
+                ->delete();
+            PurchaseReturnDetail::where('store_id', $store->id)
+                ->where('created_at', '>=', $from)
+                ->where('created_at', '<=', $to)
+                ->delete();
+    
+            $store->refunds()
+                ->where('created_at', '>=', $from)
+                ->where('created_at', '<=', $to)
+                ->delete();
+
+            RefundDetail::where('store_id', $store->id)
+                ->where('created_at', '>=', $from)
+                ->where('created_at', '<=', $to)
+                ->delete();
+    
+            $store->inventoryChecks()
+                ->where('created_at', '>=', $from)
+                ->where('created_at', '<=', $to)
+                ->delete();
+            InventoryCheckDetail::where('store_id', $store->id)
+                ->where('created_at', '>=', $from)
+                ->where('created_at', '<=', $to)
+                ->delete();
+        }
+        
+        return response()->json([
+            'message' => 'All data deleted successfully',
+        ], 200);
     }
 }

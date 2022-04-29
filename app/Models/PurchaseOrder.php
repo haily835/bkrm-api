@@ -11,7 +11,6 @@ class PurchaseOrder extends Model
     protected $guarded = [];
 
     protected $hidden = [
-        'id',
     ];
 
     public function purchaseOrderDetails()
