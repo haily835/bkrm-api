@@ -279,6 +279,18 @@ class PurchaseReturnController extends Controller
             }
         }
 
+        $supplier_name = $store->suppliers()->where('id', $purchaseReturn['supplier_id'])->first()->name;
+        PaymentReceiptVoucherController::create([
+            'value' => $purchaseReturn['paid_amount'],
+            'user_type' => 'supplier',
+            'user_name' => $supplier_name,
+            'type' => 'purchase_return',
+            'date' => $purchaseReturn['creation_date'],
+            'note' => $purchaseReturn['purchase_return_code'],
+            'is_calculated' => true,
+            'branch_id' => $branch->id,
+        ]);
+
         return response()->json([
             'message' => 'Purchase return created successfully',
             'data' => $purchaseReturn,
@@ -382,6 +394,8 @@ class PurchaseReturnController extends Controller
         }
         PurchaseReturn::destroy($purchaseReturn->id);
         PurchaseReturnDetail::where('purchase_return_id', $purchaseReturn->id)->delete();
+        PaymentReceiptVoucherController::deleteByCode($purchaseReturn['purchase_return_code']);
+
         return response()->json([
             'message' => 'deleted successfully',
             'data' => [

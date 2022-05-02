@@ -294,6 +294,18 @@ class PurchaseOrderController extends Controller
             }
         }
 
+        $supplier_name = $store->suppliers()->where('id', $purchaseOrder['supplier_id'])->first()->name;
+        PaymentReceiptVoucherController::create([
+            'value' => $purchaseOrder['paid_amount'],
+            'user_type' => 'supplier',
+            'user_name' => $supplier_name,
+            'type' => 'purchase_order',
+            'date' => $purchaseOrder['creation_date'],
+            'note' => $purchaseOrder['purchase_order_code'],
+            'is_calculated' => true,
+            'branch_id' => $branch->id,
+        ]);
+
         return response()->json([
             'message' => 'Purchase order created successfully',
             'data' => $purchaseOrder,
@@ -339,8 +351,23 @@ class PurchaseOrderController extends Controller
             'status' => 'nullable|string',
         ]);
 
+        if (array_key_exists('paid_amount', $validated)) {
+            $supplier_name = $store->suppliers()->where('id', $purchaseOrder['supplier_id'])->first()->name;
+            PaymentReceiptVoucherController::create([
+                'value' => $validated['paid_amount'] - $purchaseOrder['paid_amount'],
+                'user_type' => 'supplier',
+                'user_name' => $supplier_name,
+                'type' => 'purchase_order',
+                'note' => $purchaseOrder['purchase_order_code'],
+                'is_calculated' => true,
+                'branch_id' => $branch->id,
+            ]);
+        }
+        
+
         $purchaseOrder->update($validated);
 
+        
         return response()->json([
             'message' => 'Purchase order updated successfully',
             'data' => $purchaseOrder,
@@ -398,6 +425,8 @@ class PurchaseOrderController extends Controller
         }
         PurchaseOrder::destroy($purchaseOrder->id);
         PurchaseOrderDetail::where('purchase_order_id', $purchaseOrder->id)->delete();
+        PaymentReceiptVoucherController::deleteByCode($purchaseOrder['purchase_order_code']);
+
         return response()->json([
             'message' => 'deleted successfully',
             'data' => [

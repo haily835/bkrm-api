@@ -336,6 +336,18 @@ class OrderController extends Controller
                 ]);
             }
         }
+        $customer_name = $store->customers()->where('id', $order['customer_id'])->first()->name;
+        PaymentReceiptVoucherController::create([
+            'value' => $order['paid_amount'],
+            'user_type' => 'customer',
+            'user_name' => $customer_name,
+            'type' => 'order',
+            'date' => $order['creation_date'],
+            'note' => $orderCode,
+            'is_calculated' => true,
+            'branch_id' => $branch->id,
+        ]);
+
         return response()->json([
             'message' => 'Order created successfully',
             'data' => [
@@ -404,10 +416,26 @@ class OrderController extends Controller
             'notes' => 'nullable|string',
             'status' => 'nullable|string',
         ]);
+        
+        $customer_name = $store->customers()->where('id', $order['customer_id'])->first()->name;
+
+        if (array_key_exists('paid_amount',$validated)) {
+            PaymentReceiptVoucherController::create([
+                'value' => $validated['paid_amount'] - $order['paid_amount'],
+                'user_type' => 'customer',
+                'user_name' => $customer_name,
+                'type' => 'order',
+                'note' => $order['order_code'],
+                'is_calculated' => true,
+                'branch_id' => $branch->id,
+            ]);
+        }
 
         $order->update($validated);
 
 
+        
+        
         return response()->json([
             'message' => 'Order updated successfully',
             'data' => $order,
@@ -448,6 +476,7 @@ class OrderController extends Controller
         }
         Order::destroy($order->id);
         OrderDetail::where('order_id', $order->id)->delete();
+        PaymentReceiptVoucherController::deleteByCode($order['order_code']);
         return response()->json([
             'message' => 'Order deleted successfully',
             'data' => [

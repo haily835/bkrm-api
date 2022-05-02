@@ -148,6 +148,19 @@ class RefundController extends Controller
             }
         }
 
+
+        $customer_name = $store->customers()->where('id', $order['customer_id'])->first()->name;
+        PaymentReceiptVoucherController::create([
+            'value' => $refund['paid_amount'],
+            'user_type' => 'customer',
+            'user_name' => $customer_name,
+            'type' => 'refund',
+            'date' => $validated['import_date'],
+            'note' => $refundCode,
+            'is_calculated' => true,
+            'branch_id' => $branch->id,
+        ]);
+
         return response()->json([
             'message' => 'Refund created successfully',
             'data' => $refund,
@@ -371,6 +384,8 @@ class RefundController extends Controller
         }
         Refund::destroy($refund->id);
         RefundDetail::where('refund_id', $refund->id)->delete();
+        PaymentReceiptVoucherController::deleteByCode($refund['refund_code']);
+
         return response()->json([
             'message' => 'deleted successfully',
             'data' => [
