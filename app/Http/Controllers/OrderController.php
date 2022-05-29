@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 use App\Models\Employee;
 use App\Models\BranchInventory;
+use Exception;
 use Illuminate\Support\Facades\DB;
 
 class OrderController extends Controller
@@ -113,7 +114,14 @@ class OrderController extends Controller
         $order_with_total_amount = [];
         foreach($orders as $order) {
             $order_total_amount = OrderDetail::where('order_id', $order->id)->sum('quantity');
-            array_push($order_with_total_amount, array_merge($order->toArray(), ['total_quantity' => $order_total_amount]));
+            $promotion_detail = json_decode($order['promotion_detail'], true);
+            $other_fee_detail = json_decode($order['other_fee_detail'], true);
+
+            array_push($order_with_total_amount, array_merge($order->toArray(), [
+                'total_quantity' => $order_total_amount,
+                'other_fee_detail' => $other_fee_detail,
+                'promotion_detail' => $promotion_detail
+            ]));
         }
 
         return response()->json([
@@ -142,6 +150,10 @@ class OrderController extends Controller
             'is_customer_order' => 'required|boolean',
             'new_customer' => 'nullable|string',
             'points' => 'nullable|numeric',
+            'other_fee_value' => 'nullable|numeric',
+            'other_fee_detail' => 'nullable',
+            'promotion_detail' => 'nullable',
+            'promotion_value' => 'nullable|numeric',
         ]);
 
         $isManageInventoryEnable = json_decode($store['general_configuration'], true)['inventory']['status'];
@@ -265,7 +277,11 @@ class OrderController extends Controller
             'created_user_name' => $user->name,
             'status' => $validated['status'],
             'notes' => '',
-            'order_code' => $orderCode
+            'order_code' => $orderCode,
+            'promotion_value' => array_key_exists('promotion_value', $validated) ? $validated['promotion_value'] : 0,
+            'promotion_detail' => array_key_exists('promotion_detail', $validated) ? json_encode($validated['promotion_detail']) : '',
+            'other_fee_value' => array_key_exists('other_fee_value', $validated) ? $validated['other_fee_value'] : 0,
+            'other_fee_detail' => array_key_exists('other_fee_detail', $validated) ? json_encode($validated['other_fee_detail']) : '',
         ]);
 
         foreach ($validated['details'] as $detail) {
@@ -346,8 +362,24 @@ class OrderController extends Controller
             'note' => $orderCode,
             'is_calculated' => true,
             'branch_id' => $branch->id,
+            'is_minus' => false,
+            'payment_method' => $order['payment_method'],
         ]);
 
+
+        // add promotion count
+        // try {
+        //     if ($validated['promotion_detail']['selected_promotion'] !== null) {
+        //         $promotion_id = $validated['promotion_detail']['selected_promotion']['id'];
+        //         DB::table('promotions')->where('id', $promotion_id)->increment('times');
+        //         DB::table('promotions')->where('id', $promotion_id)->increment('total_amount', $validated['promotion_value']);
+
+        //     }
+        //     throw new Exception('Division by zero.');
+        // } catch (Exception $e) {
+
+        // }
+    
         return response()->json([
             'message' => 'Order created successfully',
             'data' => [
@@ -428,6 +460,8 @@ class OrderController extends Controller
                 'note' => $order['order_code'],
                 'is_calculated' => true,
                 'branch_id' => $branch->id,
+                'is_minus' => false,
+                'date' => $order['creation_date'],
             ]);
         }
 

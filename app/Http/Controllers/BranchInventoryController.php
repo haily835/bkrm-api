@@ -8,6 +8,21 @@ use App\Models\Store;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
+function Quartile($Array, $Quartile)
+{
+    sort($Array);
+    $pos = (count($Array) - 1) * $Quartile;
+
+    $base = floor($pos);
+    $rest = $pos - $base;
+
+    if (isset($Array[$base + 1])) {
+        return $Array[$base] + $rest * ($Array[$base + 1] - $Array[$base]);
+    } else {
+        return $Array[$base];
+    }
+}
+
 class BranchInventoryController extends Controller
 {
     // transfer inventory between branch
@@ -15,30 +30,19 @@ class BranchInventoryController extends Controller
     {
         $validated = $request->validate([
             'to_id' => 'required|numeric',
+            'to_name' => 'required|string',
             'value_quantity' => 'required|numeric',
             'batches' => 'nullable|string',
             'has_batches' => 'required|boolean',
             'product_id' => 'required|numeric',
             'created_user_name' => 'required|string',
             'created_user_type' => 'required|string',
-            'created_user_id' => 'required|numeric'
+            'created_user_id' => 'required|numeric',
+            'created_at' => 'required'
         ]);
 
-        BranchInventory::where('store_id', $store->id)
-            ->where('branch_id', $branch->id)
-            ->where('product_id', $validated['product_id'])
-            ->decrement('quantity_available', $validated['value_quantity']);
-
-        BranchInventory::where('store_id', $store->id)
-            ->where('branch_id', $validated['to_branch'])
-            ->where('product_id', $validated['product_id'])
-            ->increment('quantity_available', $validated['value_quantity']);
-
-
-        $to_batches = [];
-
         # generate code
-        $last_id = DB::table('transfer_inventory')->where('branch_id', $branch->id)->count();
+        $last_id = DB::table('transfer_inventory')->where('store_id', $store->id)->count();
 
         $code = 'CK' . sprintf('%06d', $last_id + 1);
 
@@ -56,36 +60,76 @@ class BranchInventoryController extends Controller
             'created_user_id' => $validated['created_user_id'],
             'code' => $code,
             'store_id' => $store->id,
+            'status' => 'pending',
+            'created_at' => $validated['created_at']
         ];
 
-        if ($validated['has_batches']) {
-            $batches = json_decode($validated['batches'], true);
+
+
+
+        DB::table('transfer_inventory')->insert($transfer_inventory);
+        return response()->json([
+            'transfer_inventory' => $transfer_inventory,
+        ]);
+    }
+
+    public function index(Request $request, Store $store, Branch $branch)
+    {
+        $data = DB::table('transfer_inventory')
+            ->where('from_id', $branch->id)
+            ->orWhere('to_id', $branch->id)
+            ->leftJoin('products', 'products.id', '=', 'transfer_inventory.product_id')
+            ->orderBy('created_at', 'desc')
+            ->select('products.status as product_status', 'products.*', 'transfer_inventory.*')
+            ->get();
+        return response()->json([
+            'data' => $data
+        ]);
+    }
+
+    public function update(Request $request, Store $store, Branch $branch, $id)
+    {
+        $validated = $request->all();
+
+        if (array_key_exists('status', $validated) && $validated['status'] === 'closed') {
+            BranchInventory::where('store_id', $store->id)
+                ->where('branch_id', $validated['from_id'])
+                ->where('product_id', $validated['product_id'])
+                ->decrement('quantity_available', $validated['quantity']);
+
+            BranchInventory::where('store_id', $store->id)
+                ->where('branch_id', $validated['to_id'])
+                ->where('product_id', $validated['product_id'])
+                ->increment('quantity_available', $validated['quantity']);
+
+            $to_batches = [];
+            $batches = json_decode($validated['from_batches'], true);
             foreach ($batches as $batch) {
                 DB::table('product_batches')
-                    ->where('store_id', $store->id)
-                    ->where('branch_id', $branch->id)
+                ->where('store_id', $store->id)
+                    ->where('branch_id', $validated['from_id'])
                     ->where('product_id', $validated['product_id'])
                     ->where('batch_code', $batch['batch_code'])
                     ->decrement('quantity', $batch['quantity']);
 
                 $last_id = DB::table('product_batches')
-                    ->where('store_id', $store->id)
-                    ->where('branch_id', $validated['to_branch'])
+                ->where('store_id', $store->id)
+                    ->where('branch_id', $validated['to_id'])
                     ->where('product_id',  $validated['product_id'])
                     ->get()->count();
                 $batch_code = 'L' . sprintf('%04d', $last_id + 1);
 
-                
+
                 DB::table('product_batches')
-                    ->insert([
-                        'store_id' => $store->id,
-                        'branch_id' => $validated['to_branch'],
-                        'product_id' =>  $validated['product_id'],
-                        'quantity' => $batch['quantity'],
-                        'expiry_date' => $batch['expiry_date'],
-                        'batch_code' =>  $batch_code,
-                        'position' => $batch['position']
-                    ]);
+                ->insert([
+                    'store_id' => $store->id,
+                    'branch_id' => $validated['to_id'],
+                    'product_id' =>  $validated['product_id'],
+                    'quantity' => $batch['quantity'],
+                    'expiry_date' => $batch['expiry_date'],
+                    'batch_code' =>  $batch_code,
+                    'position' => $batch['position']
+                ]);
 
                 array_push($to_batches, [
                     'batch_code' => $batch_code,
@@ -95,29 +139,24 @@ class BranchInventoryController extends Controller
                     'quantity' => $batch['quantity'],
                 ]);
             }
+
+
+            DB::table('transfer_inventory')
+                ->where('id', $id)
+                ->update(['to_batches' => json_encode($to_batches)]);
         }
 
-        $transfer_inventory = array_merge($transfer_inventory, [
-            'to_batches' => $to_batches,
-        ]);
 
-        DB::table('transfer_inventory')->insert($transfer_inventory);
-        return response()->json([
-            'transfer_inventory' => $transfer_inventory,
-        ]);
-    }
-
-    public function index(Request $request, Store $store, Branch $branch) {
         $data = DB::table('transfer_inventory')
-            ->where('from_id', $branch->id)
-            ->orWhere('to_id', $branch->id)
-            ->leftJoin('products', 'products.id', '=', 'transfer_inventory.product_id')->get();
+            ->where('id', $id)
+            ->update(['status' => $validated['status']]);
         return response()->json([
             'data' => $data
         ]);
     }
 
-    public function destroy(Request $request, Store $store, $id) {
+    public function destroy(Request $request, Store $store, $id)
+    {
         $transfer_inventory = DB::table('transfer_inventory')->where('id', $id)->first();
 
         BranchInventory::where('store_id', $store->id)
@@ -138,9 +177,8 @@ class BranchInventoryController extends Controller
                 ->where('product_id', $transfer_inventory['product_id'])
                 ->where('batch_code', $batch['batch_code'])
                 ->increment('quantity', $batch['quantity']);
-            
         }
-    
+
         $to_batches = json_decode($transfer_inventory['to_batches'], true);
         foreach ($to_batches as $batch) {
             DB::table('product_batches')
@@ -149,7 +187,6 @@ class BranchInventoryController extends Controller
                 ->where('product_id', $transfer_inventory['product_id'])
                 ->where('batch_code', $batch['batch_code'])
                 ->decrement('quantity', $batch['quantity']);
-            
         }
         $transfer_inventory = DB::table('transfer_inventory')->where('id', $id)->delete();
     }

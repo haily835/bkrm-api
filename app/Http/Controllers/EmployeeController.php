@@ -69,7 +69,7 @@ class EmployeeController extends Controller
         $fields = $request->validate([
             'name' => 'required|string',
             'password' => 'required|string|confirmed',
-            'user_name' => 'required|string|unique:employees,user_name',
+            'user_name' => 'required|string',
             'phone' => 'nullable|string',
             'email' => 'nullable|string',
             'date_of_birth' => 'nullable|date_format:Y-m-d',
@@ -83,6 +83,13 @@ class EmployeeController extends Controller
             'branches' => 'required|array',
             'image' => 'nullable',
         ]);
+
+        $existed = Employee::where('user_name', $fields['user_name'])->where('status', 'active')->first();
+        if($existed) {
+            return response()->json([
+                'status' => 'Employee user_name existed'
+            ], 500);
+        }
 
         $imagePath = "";
         if (array_key_exists('image', $fields)) {

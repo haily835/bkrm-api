@@ -159,6 +159,8 @@ class RefundController extends Controller
             'note' => $refundCode,
             'is_calculated' => true,
             'branch_id' => $branch->id,
+            'is_minus' => true,
+            'payment_method' => $refund['payment_method']
         ]);
 
         return response()->json([

@@ -86,8 +86,7 @@ class PurchaseOrderController extends Controller
             });
             $details->where(function ($query) use (&$search_key) {
                 $query->where('purchase_orders.purchase_order_code', $search_key)
-                    ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
-                    ->orWhere('suppliers.name', 'like', '%' . $search_key . '%');
+                    ->orWhere('created_user_name', 'like', '%' . $search_key . '%');
             });
         }
 
@@ -150,6 +149,7 @@ class PurchaseOrderController extends Controller
             'status' => 'required|string',
             'details' => 'required',
             'import_date' => 'required|date_format:Y-m-d H:i:s',
+            'is_imported' => 'nullable|numeric',
         ]);
 
         // get the user of  token
@@ -202,6 +202,8 @@ class PurchaseOrderController extends Controller
             'created_user_type' => $created_user_type,
             'created_user_name' => $user->name,
             'status' => $validated['status'],
+            'is_imported' => array_key_exists('is_imported',$validated) ? $validated['is_imported'] : 1,
+            'import_date' => array_key_exists('is_imported',$validated) ? ($validated['is_imported'] ? $creation_date : null) :  $creation_date,
         ]);
 
         foreach ($validated['details'] as $detail) {
@@ -215,7 +217,6 @@ class PurchaseOrderController extends Controller
                 'branch_id' => $branch->id,
                 'transaction_type' => 'purchased',
             ]);
-
 
             $batches = [];
 
@@ -265,12 +266,13 @@ class PurchaseOrderController extends Controller
                 'product_id' => $product_id,
                 'inventory_transaction_id' => $inventoryTransaction->id,
                 'purchase_order_id' => $purchaseOrder->id,
-                'posted_to_inventory' => true,
-                'date_received' => $validated['import_date'],
+                'posted_to_inventory' => array_key_exists('is_imported',$validated) ? $validated['is_imported'] : true,
+                'date_received' => array_key_exists('is_imported',$validated) ? ($validated['is_imported'] ? $creation_date : null) :  $creation_date,
                 'unit_price' => $detail['unit_price'],
                 'quantity' => $detail['quantity'],
                 'returned_quantity' => 0,
-                'batches' => json_encode($batches)
+                'batches' => json_encode($batches),
+                'created_at' => $creation_date,
             ]);
 
 
@@ -304,6 +306,8 @@ class PurchaseOrderController extends Controller
             'note' => $purchaseOrder['purchase_order_code'],
             'is_calculated' => true,
             'branch_id' => $branch->id,
+            'is_minus' => true,
+            'payment_method' => $purchaseOrder['payment_method']
         ]);
 
         return response()->json([
@@ -349,6 +353,8 @@ class PurchaseOrderController extends Controller
             'payment_method' => 'nullable|string',
             'notes' => 'nullable|string',
             'status' => 'nullable|string',
+            'imported_date' => 'nullable|date_format:Y-m-d',
+            'is_imported' => 'nullable|numeric',
         ]);
 
         if (array_key_exists('paid_amount', $validated)) {
@@ -361,6 +367,7 @@ class PurchaseOrderController extends Controller
                 'note' => $purchaseOrder['purchase_order_code'],
                 'is_calculated' => true,
                 'branch_id' => $branch->id,
+                'is_minus' => true,
             ]);
         }
         
@@ -442,5 +449,18 @@ class PurchaseOrderController extends Controller
         return response()->json([
             'message' => 'All Order deleted successfully',
         ], 200);
+    }
+
+    public function updateDetail(Request $request, Store $store, Branch $branch, $id) {
+        $validated = $request->validate([
+            'date_received' => 'required',
+            'quantity' => 'required|numeric',
+            'batches' => 'nullable|string',
+            'posted_to_inventory' => 'required|numeric'
+        ]);
+        $result = PurchaseOrderDetail::where('id', $id)->update($validated);
+        return response()->json([
+            'data' => $result,
+        ]);
     }
 }

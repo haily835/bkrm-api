@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BranchInventory;
+use App\Models\PurchaseOrderDetail;
 use Illuminate\Http\Request;
 use App\Models\Product;
 use App\Models\Store;
@@ -14,6 +15,29 @@ use Illuminate\Support\Facades\DB;
 use App\Models\Barcode;
 use App\Models\InventoryCheckDetail;
 use Illuminate\Support\Facades\Validator;
+use DateTime;
+
+function Quartile($Array, $Quartile) {
+    sort($Array);
+    $pos = (count($Array) - 1) * $Quartile;
+  
+    $base = floor($pos);
+    $rest = $pos - $base;
+  
+    if( isset($Array[$base+1]) ) {
+      return $Array[$base] + $rest * ($Array[$base+1] - $Array[$base]);
+    } else {
+      return $Array[$base];
+    }
+}
+
+function getExtreme($Array) {
+    $Q1 = Quartile($Array, 0.25);
+    $Q3 = Quartile($Array, 0.75);
+
+    $IQR = $Q3 - $Q1;
+    return $Q3 + 1.5*$IQR;
+}
 
 class ProductController extends Controller
 {
@@ -22,6 +46,8 @@ class ProductController extends Controller
         $search_key = $request->query("searchKey");
         $limit = $request->query("limit");
         $page = $request->query("page");
+
+        $forcastMode = $request->query("forcastMode");
 
         // extract query string
         $min_standard_price = $request->query('minStandardPrice');
@@ -71,7 +97,6 @@ class ProductController extends Controller
         if ($categoryId) {
             array_push($queries, ['products.category_id', '=', $categoryId]);
         }
-
 
         $products = [];
         $db_query = $store->products()
@@ -131,13 +156,34 @@ class ProductController extends Controller
                 ->orderBy('expiry_date', 'desc')
                 ->get();
 
+            
+            $reorder_quantity = 0;
+
+            if ($forcastMode === 'lastXdays') {
+                $reorder_quantity = $this->lastXdays(
+                    $store->id, $branch->id, 
+                    $request->query("currentDate"), $request->query("forcastPeriod"), 
+                    $request->query("historyPeriod"), $product['id']);
+            }
+
+            if ($forcastMode === "samePeriodPastYear") {
+                $reorder_quantity = $this->samePeriodPastYear(
+                    $store->id, $branch->id, 
+                    $request->query("currentDate"), $request->query("yearNum"), 
+                    $request->query("period"), $product['id']);
+            }
+
             array_push($data, array_merge($product, [
                 'category' => $category,
                 'batches' => $batches,
                 'product_prices' => DB::table('product_prices')->where('product_id', $product['id'])->get(),
                 'inventory_checks' => InventoryCheckDetail::where('product_id', $product['id'])->get(),
-                'branch_inventories' => BranchInventory::where('product_id', $product['id'])->join('branches', 'branches.id', 'branch_inventories.branch_id')->where('branches.status', 'active')->get(),
+                'branch_inventories' => $this->getAllBranchInventory($product['id']),
                 'branch_quantity' => $branch_quantity,
+                'lead_times' => $this->lead_time($store->id, $branch->id, $product['id']),
+                'sale_velocity' => $this->sale_velocity($store->id, $branch->id, $product['id']),
+                'reorder_quantity' => $reorder_quantity,
+                'ordering_quantity' => $this->orderingQuantity($branch->id, $product['id'])
             ]));
         }
 
@@ -145,6 +191,89 @@ class ProductController extends Controller
             'data' => $data,
             'total_rows' => $total_row
         ], 200);
+    }
+
+    public function getAllBranchInventory($product_id) {
+        return array_map(function ($v) use($product_id) {
+            return array_merge($v, [
+                'ordering_quantity' => $this->orderingQuantity($v['branch_id'],$product_id)
+            ]);
+        }, 
+        BranchInventory::where('product_id', $product_id)->join('branches', 'branches.id', 'branch_inventories.branch_id')->where('branches.status', 'active')->get()->toArray());
+    }
+
+    public function samePeriodPastYear($store_id, $branch_id, $current_day, $year_num, $period, $product_id) {
+        $datePastYear = date('Y-m-d', strtotime($current_day . ' -' . $year_num .' year'));
+
+        $start = $datePastYear . '00:00:00';
+        $end =  date('Y-m-d', strtotime( $datePastYear. ' -' . $period . ' days')) . ' 11:59:59';
+        return DB::table('order_details')
+            ->where('store_id', $store_id)->where('branch_id', $branch_id)->where('product_id', $product_id)
+            ->where('created_at', '>=', $start)->where('created_at', '<=', $end)->sum('quantity');
+    }
+
+    public function lastXdays($store_id, $branch_id, $current_day, $forcast_period, $history_period, $product_id) {
+        $start =  date('Y-m-d', strtotime( $current_day. ' -' . $history_period . ' days')) . ' 00:00:00';
+        $end = $current_day . ' 23:59:59';
+        $total = DB::table('order_details')
+            ->where('store_id', $store_id)->where('branch_id', $branch_id)->where('product_id', $product_id)
+            ->where('created_at', '>=', $start)->where('created_at', '<=', $end)->sum('quantity');
+        $velocity = $total / $history_period;
+        // return $velocity;
+        return ceil($velocity * $forcast_period);
+    }
+
+ 
+    public function orderingQuantity($branch_id, $product_id) {
+        $total = DB::table('purchase_order_details')
+            ->where('branch_id', $branch_id)
+            ->where('product_id', $product_id)
+            ->where('posted_to_inventory', false)->sum('quantity');
+        return $total;
+    }
+
+    public function lead_time($store_id, $branch_id, $product_id) {
+        $details = DB::table('purchase_order_details')
+            ->where('store_id',$store_id)
+            ->where('branch_id', $branch_id)
+            ->where('product_id', $product_id)
+            ->whereNotNull('date_received')
+            ->whereNotNull('created_at')
+            ->selectRaw('datediff(date_received,created_at) as lead_time')
+            ->pluck('lead_time')->toArray();
+        
+        return array_sum($details)/ (count($details) ? count($details) : 1);
+    }
+
+    public function sale_velocity($store_id, $branch_id, $product_id) {
+        $total_order = DB::table('order_details')
+            ->where('store_id',$store_id)
+            ->where('branch_id', $branch_id)
+            ->where('product_id', $product_id)
+            ->sum('quantity');
+
+        $max_date = DB::table('order_details')
+            ->where('store_id',$store_id)
+            ->where('branch_id', $branch_id)
+            ->where('product_id', $product_id)
+            ->max('created_at');
+
+        $min_date = DB::table('order_details')
+            ->where('store_id',$store_id)
+            ->where('branch_id', $branch_id)
+            ->where('product_id', $product_id)
+            ->min('created_at');
+
+            $date1 = new DateTime($min_date);
+            $date2 = new DateTime($max_date);
+        $diff = $date1->diff($date2);
+
+        if ($diff->days >= 0) {
+            
+        } else {
+            return 0;
+        }
+        return ['total_order' => $total_order, 'days' => $diff->days];
     }
 
     public function searchBranchInventory(Request $request, Store $store, Branch $branch)
@@ -179,17 +308,42 @@ class ProductController extends Controller
 
             // get branch inventory of that product
             $branch_product = $branch->inventory()->where('product_id', $product['id'])->first();
-            $branch_quantity = $branch_product->quantity_available;
+           
+            if ($branch_product) {
+                $branch_quantity = $branch_product->quantity_available;
+            } else {
+                BranchInventory::create([
+                    'store_id' => $store->id,
+                    'branch_id' => $branch->id,
+                    'product_id' => $product['id'],
+                    'quantity_available' => 0,
+                ]);
+                $branch_quantity = 0;
+            }
+            
             $batches = DB::table('product_batches')
                 ->where('store_id', $store->id)
                 ->where('branch_id', $branch->id)
                 ->orderBy('expiry_date', 'desc')
                 ->where('product_id', $product['id'])->get();
 
+            $extremeQuantity = 0;
+            $extremePrice = 0;
+            $importedQuantityHistory = PurchaseOrderDetail::where('product_id', $product['id'])->pluck('quantity')->toArray();
+            $importedPriceHistory = PurchaseOrderDetail::where('product_id', $product['id'])->pluck('unit_price')->toArray();
+
+            if (count($importedQuantityHistory) >= 2) {
+                $extremeQuantity = getExtreme($importedQuantityHistory);
+                $extremePrice = getExtreme($importedPriceHistory);
+            }
+            
             array_push($data, array_merge($product, [
                 'category' => $category,
                 'branch_quantity' => $branch_quantity,
                 'batches' => $batches,
+                'extreme' => $extremeQuantity,
+                'extreme_quantity' => $extremeQuantity,
+                'extreme_price' => $extremePrice,
                 'branch_inventories' => BranchInventory::where('product_id', $product['id'])->join('branches', 'branches.id', 'branch_inventories.branch_id')->where('branches.status', 'active')->get(),
             ]));
         }
@@ -235,7 +389,7 @@ class ProductController extends Controller
     public function store(Request $request, Store $store)
     {
         $product = $request->all();
-        $imageUrls = array_key_exists('img_url', $product) ? ($product['img_url'] ? $product['img_url'] : []) : [];
+        $imageUrls = array_key_exists('img_url', $product) ? ($product['img_url'] ? [$product['img_url']] : []) : [];
         $images = array_key_exists('images', $product) ? ($product['images'] ? $product['images'] : []) : [];
         $branch_uuid = $product['branch_uuid'];
         $category_uuid = $product['category_uuid'];
@@ -248,6 +402,10 @@ class ProductController extends Controller
 
         $branch_id = Branch::where('uuid', $branch_uuid)->first()->id;
         $newProduct = $this->createUpdateProduct($product, $store->id, $branch_id, $images, $imageUrls, null);
+
+        if (array_key_exists("error", $newProduct->toArray())) {
+            return response()->json($newProduct, 500);
+        }
         return response()->json(['data' => $newProduct]);
     }
     
@@ -348,10 +506,7 @@ class ProductController extends Controller
 
         $data = array_merge($product->toArray(), [
             'category' => $category,
-            'branch_inventories' => BranchInventory::where('product_id', $product['id'])
-                ->join('branches', 'branches.id', 'branch_inventories.branch_id')
-                ->where('branches.status', 'active')
-                ->get(),
+            'branch_inventories' => $this->getAllBranchInventory($product['id']),
             'batches' => DB::table('product_batches')
                 ->where('store_id', $store->id)
                 ->where('branch_id', $branch_id)
@@ -566,7 +721,7 @@ class ProductController extends Controller
                         'store_id' => $store->id
                     ]);
                     $category_id = $newCategory->id;
-                } 
+                }
             };
 
             unset($product['category_name']);
@@ -598,16 +753,45 @@ class ProductController extends Controller
     {
         // get all product that out of stoke
         // for each product get the lastest 10 purchase order details of it in branch
-        $out_of_stock_products = $branch->inventory()
-            ->join('products', 'branch_inventories.product_id', '=', 'products.id')
-            ->where('branch_inventories.quantity_available', '<=', 'products.min_reorder_quantity')
+        // $out_of_stock_products = $branch->inventory()
+        //     ->join('products', 'branch_inventories.product_id', '=', 'products.id')
+        //     ->where('branch_inventories.branch_id', $branch->id)
+        //     ->where('branch_inventories.quantity_available', '<=', 'products.min_reorder_quantity')
+        //     ->where('products.status', '=', 'active')
+        //     ->where('products.has_variance', '=', false)
+        //     ->get()->toArray();
+
+        $out_of_stock_products = $store->products()
+            ->leftJoin('branch_inventories', 'branch_inventories.product_id', '=', 'products.id')
+            ->where('branch_inventories.branch_id', $branch->id)
             ->where('products.status', '=', 'active')
             ->where('products.has_variance', '=', false)
             ->get()->toArray();
 
-
         $data = [];
+        $mode = $request->query("mode");
+        
         foreach ($out_of_stock_products as $product) {
+            $reorder_quantity = 0;
+            $current_day = $request->query("currentDate");
+            if ($mode === "lastXdays") {
+                $history_period = $request->query("historyPeriod");
+                $forecast_period = $request->query("forecastPeriod");
+                $reorder_quantity = $this->lastXdays($store->id, $branch->id, $current_day, $forecast_period, $history_period, $product['product_id']);
+            }
+
+            if ($mode === "samePeriodPastYear") {
+                $period = $request->query("period");
+                $year_num = $request->query("numOfYears");
+                $reorder_quantity = $this->samePeriodPastYear($store->id, $branch->id, $current_day, $year_num, $period, $product['product_id']);
+            }
+
+            $inventory = BranchInventory::where('product_id', $product['product_id'])->where('branch_id', $branch->id)->first()->quantity_available;
+            $order_quantity = $this->orderingQuantity($branch->id, $product['product_id']);
+            // if ($reorder_quantity <= $inventory + $order_quantity) {
+            //     continue;
+            // }
+
             $purchase_histories = DB::table('purchase_order_details')
                 ->where('purchase_order_details.branch_id', $branch->id)
                 ->where('product_id', '=', $product['product_id'])
@@ -626,6 +810,9 @@ class ProductController extends Controller
                 ->get()->toArray();
             array_push($data, array_merge($product, [
                 'purchase_histories' => $purchase_histories,
+                'reorder_quantity' => $reorder_quantity,
+                'inventory' => $inventory,
+                'ordering_quantity' => $this->orderingQuantity($branch->id, $product['product_id']),
                 'branch_inventories' => BranchInventory::where('product_id', $product['product_id'])->join('branches', 'branches.id', 'branch_inventories.branch_id')->where('branches.status', 'active')->get()
             ]));
         }
@@ -712,7 +899,7 @@ class ProductController extends Controller
         }
 
         if (count($errors)) {
-            return $errors;
+            return ["error" => $errors];
         }
 
         $imageUrls = $image_urls;

@@ -133,7 +133,8 @@ class ScheduleController extends Controller
           'date' => date("d/m/Y", strtotime($v['date'])),
           'employee_img_url' => $v['employee_img_url'],
           'employee_phone' => $v['employee_phone'],
-          'schedule_id' => $v['id']
+          'schedule_id' => $v['id'],
+          'timecheck' => $v['timecheck']
         ];
       }, $schedules);
 
@@ -186,11 +187,65 @@ class ScheduleController extends Controller
     ]);
 
     foreach ($validated["data"] as $schedule) {
-      DB::table('schedules')->where('id', $schedule['schedule_id'])->update(['status' => $schedule['status']]);
+      if ($schedule['status']) {
+        $updated = ['timecheck' => $schedule['timecheck'], 'status' => $schedule['status']];
+      } else {
+        $updated = ['status' => $schedule['status'], 'timecheck' => null];
+      }
+      DB::table('schedules')->where('id', $schedule['schedule_id'])
+        ->update($updated);
     }
 
     return response()->json([
       'message' => 'updated schedule'
     ]);
+  }
+
+  public function checkAttendanceQR(Request $request, Store $store, Branch $branch)
+  {
+    $validated = $request->validate([
+      "employeeId" => "required|string",
+      "time" => "required",
+      "date" => "required"
+    ]);
+
+    $employee_id = DB::table("employees")->where('uuid', $validated["employeeId"])->first()->id;
+    $scheduleFirst = DB::table("schedules")
+      ->where("employee_id", $employee_id)
+      ->where("date", $validated["date"])->get();
+
+    if (count($scheduleFirst) === 0) {
+      return response()->json([
+        'message' => 'Bạn không có ca làm việc hôm nay, hãy liên hệ với chủ cửa hàng'
+      ]);
+    }
+
+    $schedules = DB::table("schedules")
+      // ->leftJoin('shifts', 'schedules.shift_id', '=', 'shifts.id')
+      ->where("employee_id", $employee_id)
+      ->where("date", $validated["date"])->get()->toArray();
+    
+    $data = [];
+    
+    foreach($schedules as $schedule) {
+      $shift = DB::table('shifts')->where('id', $schedule->shift_id)->get()[0];
+      $cur = new DateTime($validated["date"] . " " . $validated['time']);
+      $start = new DateTime( $validated["date"] . " " . $shift->start_time);
+      $end = new DateTime( $validated["date"] . " " . $shift->end_time);
+      if ($cur >= $start && $cur <= $end) {
+        DB::table("schedules")->where('id', $schedule->id)->update(['status' => 1, 'timecheck' => $validated["date"] . " " . $validated['time']]);
+        array_push($data, array_merge((array) $schedule, ['shift_name' => $shift->name, 'start_time' => $shift->start_time, 'end_time' => $shift->end_time]));
+      }
+    }
+    if (count($data)) {
+      return response()->json([
+        'message' => 'Điểm danh thành công',
+        'data' => $data,
+      ]);
+    } else {
+      return response()->json([
+        'message' => 'Điểm danh thất bại vì không có lịch làm việc'
+      ]);
+    }
   }
 }

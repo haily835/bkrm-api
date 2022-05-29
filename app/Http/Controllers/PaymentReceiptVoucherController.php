@@ -46,9 +46,11 @@ class PaymentReceiptVoucherController extends Controller
         if ($type) {
             array_push($queries, ['payment_receipt_vouchers.type', '=', $type]);
         }
+
         if ($user_type) {
             array_push($queries, ['payment_receipt_vouchers.user_type', '=', $user_type]);
         }
+
         if ($user_name) {
             array_push($queries, ['payment_receipt_vouchers.user_name', 'like',  '%' . $user_name . '%']);
         }
@@ -60,9 +62,46 @@ class PaymentReceiptVoucherController extends Controller
 
         $total_rows = $database_query->get()->count();
 
+        $start_cashbook = DB::table('payment_receipt_vouchers')
+            ->where('branch_id', '=', $branch->id)
+            ->where('date', '<=', $start_date)->where('is_minus', false)->get()->sum('value') -  
+            DB::table('payment_receipt_vouchers')
+            ->where('branch_id', '=', $branch->id)
+            ->where('date', '<=', $start_date)
+            ->where('is_minus', true)->get()->sum('value');
+
+        $end_cashbook = DB::table('payment_receipt_vouchers')
+            ->where('branch_id', '=', $branch->id)
+            ->where('date', '<=', $end_date)
+            ->where('is_minus', false)->get()->sum('value') -  
+            DB::table('payment_receipt_vouchers')
+            ->where('branch_id', '=', $branch->id)
+            ->where('date', '<=', $end_date)
+            ->where('is_minus', true)->get()->sum('value');
+
+        $total = DB::table('payment_receipt_vouchers')
+        ->where('branch_id', '=', $branch->id)
+        ->where('is_minus', false)->get()->sum('value') -  
+        DB::table('payment_receipt_vouchers')
+        ->where('branch_id', '=', $branch->id)
+        ->where('is_minus', true)->get()->sum('value');
+
+        $pay = DB::table('payment_receipt_vouchers')
+            ->where('branch_id', '=', $branch->id)
+            ->where('date', '>=', $start_date)
+            ->where('date', '<=', $end_date)
+            ->where('is_minus', true)->get()->sum('value');
+
+        $receive = DB::table('payment_receipt_vouchers')
+        ->where('branch_id', '=', $branch->id)
+        ->where('date', '>=', $start_date)
+        ->where('date', '<=', $end_date)
+        ->where('is_minus', false)->get()->sum('value');
+        
+
         if ($limit) {
             $result = $database_query
-                ->orderBy($order_by, $sort)
+                ->orderBy('date', 'desc')
                 ->offset($limit * $page)
                 ->limit($limit)
                 ->get();
@@ -72,10 +111,14 @@ class PaymentReceiptVoucherController extends Controller
                 ->get();
         }
 
-
         return response()->json([
             'data' => $result,
             'total_rows' => $total_rows,
+            'start' => $start_cashbook,
+            'end' => $end_cashbook,
+            'pay' => $pay,
+            'receive' => $receive,
+            'total' => $total
         ], 200);
     }
 
@@ -89,7 +132,9 @@ class PaymentReceiptVoucherController extends Controller
             'type' => 'required|string',
             'note' => 'nullable|string',
             'is_calculated' => 'required|boolean',
-            'branch_id' => 'required|numeric'
+            'is_minus' => 'required|boolean',
+            'created_user_name' => 'required|string',
+            'payment_method' => 'required|string',
         ]);
 
         $result = $this->create(array_merge($validated, [
@@ -102,23 +147,44 @@ class PaymentReceiptVoucherController extends Controller
         ], 200);
     }
 
-    public function delete(Request $request, $id)
+    public function delete(Request $request, Store $store, Branch $branch, $id)
     {
         $status = DB::table('payment_receipt_vouchers')->where('id', $id)->delete();
         return response()->json([
-            'message' => $status
+            'message' => $id
+        ], 200);
+    }
+
+    public function update(Request $request,  Store $store, Branch $branch, $id)
+    {
+        $validated = $request->validate([
+            'value' => 'required|numeric',
+            'user_type' => 'nullable|string',
+            'user_name' => 'nullable|string',
+            'type' => 'required|string',
+            'note' => 'nullable|string',
+            'is_calculated' => 'required|boolean',
+            'is_minus' => 'required|boolean',
+            'created_user_name' => 'required|string',
+            'payment_method' => 'required|string',
+        ]);
+        $status = DB::table('payment_receipt_vouchers')->where('id', $id)->update($validated);
+        return response()->json([
+            'message' => $id
         ], 200);
     }
 
     public static function deleteByCode($code)
     {
         $status = DB::table('payment_receipt_vouchers')->where('note', $code)->delete();
+        return response()->json([
+            'message' => $status
+        ], 200);
     }
 
     public static function create($data) {
         $last_id = DB::table('payment_receipt_vouchers')
                 ->where('branch_id', $data['branch_id'])
-                ->where('type', $data['type'])
                 ->get()
                 ->count();
         $code = 'TC' . sprintf('%06d', $last_id + 1);

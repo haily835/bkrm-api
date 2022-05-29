@@ -126,7 +126,6 @@ class CustomerOrderController extends Controller
         ], 200);
     }
 
-
     public function confirm(Request $request, Store $store, Branch $branch, CustomerOrder $customerOrder)
     {
         $details = json_decode($customerOrder->details);

@@ -79,7 +79,7 @@ class PurchaseReturnController extends Controller
 
         if ($search_key) {
             $purchase_order = $store->purchaseOrders()->where('purchase_order_code', $search_key)->first();
-            if ($purchase_order->id) {
+            if ($purchase_order) {
                 $database_query->where(function ($query) use (&$search_key, &$purchase_order) {
                     $query->where('purchase_returns.purchase_return_code', $search_key)
                         ->orWhere('suppliers.name', 'like', '%' . $search_key . '%')
@@ -88,7 +88,6 @@ class PurchaseReturnController extends Controller
                 });
                 $details->where(function ($query) use (&$search_key, &$purchase_order) {
                     $query->where('purchase_returns.purchase_return_code', $search_key)
-                        ->orWhere('suppliers.name', 'like', '%' . $search_key . '%')
                         ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
                         ->orWhere('purchase_order_id', '=', $purchase_order->id);
                 });
@@ -100,8 +99,7 @@ class PurchaseReturnController extends Controller
                 });
                 $details->where(function ($query) use (&$search_key) {
                     $query->where('purchase_returns.purchase_return_code', $search_key)
-                        ->orWhere('created_user_name', 'like', '%' . $search_key . '%')
-                        ->orWhere('suppliers.name', 'like', '%' . $search_key . '%');
+                        ->orWhere('created_user_name', 'like', '%' . $search_key . '%');
                 });
             }
         }
@@ -289,6 +287,8 @@ class PurchaseReturnController extends Controller
             'note' => $purchaseReturn['purchase_return_code'],
             'is_calculated' => true,
             'branch_id' => $branch->id,
+            'is_minus' => false,
+            'payment_method' => $purchaseReturn['payment_method']
         ]);
 
         return response()->json([

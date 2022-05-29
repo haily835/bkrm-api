@@ -136,8 +136,7 @@ class StoreController extends Controller
         if (array_key_exists('image', $data)) {
             if ($data['image'] != "") {
                 $imagePath = $data['image']->store('store-images', 'public');
-                $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
-                $sized_image->save();
+                
                 $imagePath = 'https://www.cuahangcuatoi.net/bkrm-api/storage/app/public/' . $imagePath;
             }
         }
@@ -295,16 +294,16 @@ class StoreController extends Controller
     public function sendEmail(Request $request, Store $store)
     {   
         try {
-            $email_configuration = json_decode($store->email_configuration, true);
-            if (!is_null($email_configuration)) {
+            $general_configuration = json_decode($store->general_configuration, true);
+            if (!is_null($general_configuration)) {
                 $config = array(
                     'driver'     =>     'smtp',
                     'host'       =>     'smtp.gmail.com',
                     'port'       =>     587,
-                    'username'   =>     $email_configuration['username'],
-                    'password'   =>     $email_configuration['password'],
+                    'username'   =>     $general_configuration['email']['emailAddress'],
+                    'password'   =>     $general_configuration['email']['password'],
                     'encryption' =>     'tls',
-                    'from'       =>     array('address' => $email_configuration['username'], 'name' => $store->name)
+                    'from'       =>     array('address' => $general_configuration['email']['emailAddress'], 'name' => $store->name)
                 );
                 Config::set('mail', $config);
             }
@@ -324,7 +323,9 @@ class StoreController extends Controller
 
         } catch (Exception $e) {
             return response()->json([
-                'data' => 'Send erro'
+                'data' => 'Send erro',
+                'eror' => $e,
+                'email' => $general_configuration 
             ], 200);
         }
 
@@ -334,9 +335,13 @@ class StoreController extends Controller
     public function getNotification(Request $request, Store $store, Branch $branch) {
         $current_date = $request->query('current_date');
     
-        $out_of_stock_products = $branch->inventory()
-            ->join('products', 'branch_inventories.product_id', '=', 'products.id')
-            ->where('branch_inventories.quantity_available', '<=', 'products.min_reorder_quantity')
+        $out_of_stock_products = $store->products()
+            ->join('branch_inventories', 'branch_inventories.product_id', '=', 'products.id')
+            // ->where('branch_inventories.quantity_available', '<=', 'products.min_reorder_quantity')
+            ->where(function ($query) {
+                $query->where('branch_inventories.quantity_available', '<=', 'products.min_reorder_quantity')
+                    ->orWhere('branch_inventories.quantity_available', '>=', 'products.max_order');
+            })
             ->where('products.status', '=', 'active')
             ->where('products.has_variance', '=', false)
             ->get()->toArray();
