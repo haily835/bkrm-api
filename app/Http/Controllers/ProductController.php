@@ -220,7 +220,7 @@ class ProductController extends Controller
             ->where('created_at', '>=', $start)->where('created_at', '<=', $end)->sum('quantity');
         $velocity = $total / $history_period;
         // return $velocity;
-        return ceil($velocity * $forcast_period);
+        return ['reorder_quantity' => ceil($velocity * $forcast_period), 'total' => $total];
     }
 
  
@@ -344,7 +344,7 @@ class ProductController extends Controller
                 'extreme' => $extremeQuantity,
                 'extreme_quantity' => $extremeQuantity,
                 'extreme_price' => $extremePrice,
-                'branch_inventories' => BranchInventory::where('product_id', $product['id'])->join('branches', 'branches.id', 'branch_inventories.branch_id')->where('branches.status', 'active')->get(),
+                'branch_inventories' => $this->getAllBranchInventory($product['id']),
             ]));
         }
 
@@ -777,20 +777,23 @@ class ProductController extends Controller
             if ($mode === "lastXdays") {
                 $history_period = $request->query("historyPeriod");
                 $forecast_period = $request->query("forecastPeriod");
-                $reorder_quantity = $this->lastXdays($store->id, $branch->id, $current_day, $forecast_period, $history_period, $product['product_id']);
+                $result = $this->lastXdays($store->id, $branch->id, $current_day, $forecast_period, $history_period, $product['product_id']);
+                $reorder_quantity = $result['reorder_quantity'];
+                $total = $result['total'];
             }
 
             if ($mode === "samePeriodPastYear") {
                 $period = $request->query("period");
                 $year_num = $request->query("numOfYears");
                 $reorder_quantity = $this->samePeriodPastYear($store->id, $branch->id, $current_day, $year_num, $period, $product['product_id']);
+                $total = $reorder_quantity;
             }
 
             $inventory = BranchInventory::where('product_id', $product['product_id'])->where('branch_id', $branch->id)->first()->quantity_available;
             $order_quantity = $this->orderingQuantity($branch->id, $product['product_id']);
-            // if ($reorder_quantity <= $inventory + $order_quantity) {
-            //     continue;
-            // }
+            if ($reorder_quantity <= $inventory + $order_quantity) {
+                continue;
+            }
 
             $purchase_histories = DB::table('purchase_order_details')
                 ->where('purchase_order_details.branch_id', $branch->id)
@@ -811,6 +814,7 @@ class ProductController extends Controller
             array_push($data, array_merge($product, [
                 'purchase_histories' => $purchase_histories,
                 'reorder_quantity' => $reorder_quantity,
+                'total' => $total,
                 'inventory' => $inventory,
                 'ordering_quantity' => $this->orderingQuantity($branch->id, $product['product_id']),
                 'branch_inventories' => BranchInventory::where('product_id', $product['product_id'])->join('branches', 'branches.id', 'branch_inventories.branch_id')->where('branches.status', 'active')->get()
@@ -852,6 +856,16 @@ class ProductController extends Controller
                 if (Product::where('store_id', $store_id)->where('bar_code', $product['bar_code'])->first()) {
                     $errors = array_merge($errors, [
                         "bar_code" => "Mã barcode đã được sử dụng"
+                     ]);
+                }
+            }
+        }
+
+        if (array_key_exists('name', $product)) {
+            if ($product['name']) {
+                if (Product::where('store_id', $store_id)->where('name', $product['name'])->first()) {
+                    $errors = array_merge($errors, [
+                        "name" => "Tên sản phẩm đã được sử dung đã được sử dụng"
                      ]);
                 }
             }

@@ -127,8 +127,13 @@ class PromotionVoucherController extends Controller
             ->limit($limit)
             ->get();
 
+        $data = [];
+        foreach($promotions as $promotion) {
+            $orders = DB::table('orders')->where('promotion_id', $promotion->id)->get();
+            array_push($data, array_merge((array) $promotion, ['orders' => $orders]));
+        }
         return response()->json([
-            'promotions' => $promotions,
+            'promotions' => $data,
             'message' => 'success',
         ]);
     }

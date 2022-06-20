@@ -247,5 +247,9 @@ class ScheduleController extends Controller
         'message' => 'Điểm danh thất bại vì không có lịch làm việc'
       ]);
     }
+
+    response()->json([
+      'message'
+    ], 200);
   }
 }

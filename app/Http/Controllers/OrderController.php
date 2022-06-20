@@ -154,6 +154,7 @@ class OrderController extends Controller
             'other_fee_detail' => 'nullable',
             'promotion_detail' => 'nullable',
             'promotion_value' => 'nullable|numeric',
+            'promotion_id' => 'nullable|numeric',
         ]);
 
         $isManageInventoryEnable = json_decode($store['general_configuration'], true)['inventory']['status'];
@@ -278,6 +279,7 @@ class OrderController extends Controller
             'status' => $validated['status'],
             'notes' => '',
             'order_code' => $orderCode,
+            'promotion_id' => array_key_exists('promotion_id', $validated) ? $validated['promotion_id'] : null,
             'promotion_value' => array_key_exists('promotion_value', $validated) ? $validated['promotion_value'] : 0,
             'promotion_detail' => array_key_exists('promotion_detail', $validated) ? json_encode($validated['promotion_detail']) : '',
             'other_fee_value' => array_key_exists('other_fee_value', $validated) ? $validated['other_fee_value'] : 0,
@@ -368,17 +370,16 @@ class OrderController extends Controller
 
 
         // add promotion count
-        // try {
-        //     if ($validated['promotion_detail']['selected_promotion'] !== null) {
-        //         $promotion_id = $validated['promotion_detail']['selected_promotion']['id'];
-        //         DB::table('promotions')->where('id', $promotion_id)->increment('times');
-        //         DB::table('promotions')->where('id', $promotion_id)->increment('total_amount', $validated['promotion_value']);
+        try {
+            if (array_key_exists('promotion_id', $validated)) {
+                $promotion_id = $validated['promotion_id'];
+                DB::table('promotions')->where('id', $promotion_id)->increment('times');
+                DB::table('promotions')->where('id', $promotion_id)->increment('totalAmount', $validated['promotion_value']);
+            }
+            throw new Exception('Division by zero.');
+        } catch (Exception $e) {
 
-        //     }
-        //     throw new Exception('Division by zero.');
-        // } catch (Exception $e) {
-
-        // }
+        }
     
         return response()->json([
             'message' => 'Order created successfully',

@@ -79,7 +79,7 @@ class BranchInventoryController extends Controller
             ->where('from_id', $branch->id)
             ->orWhere('to_id', $branch->id)
             ->leftJoin('products', 'products.id', '=', 'transfer_inventory.product_id')
-            ->orderBy('created_at', 'desc')
+            ->orderBy('transfer_inventory.created_at', 'desc')
             ->select('products.status as product_status', 'products.*', 'transfer_inventory.*')
             ->get();
         return response()->json([
