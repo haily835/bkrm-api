@@ -651,7 +651,7 @@ class ProductController extends Controller
 
         $data = [];
         $productInfos = [];
-        $mergeImgPath = 'https://www.cuahangcuatoi.net/bkrm-api/storage/app/public/';
+        $mergeImgPath = 'http://' . env('IMAGE_PREFIX') . '/bkrm-api/storage/app/public/';
 
         if ($searchKey) {
             $productInfos = Barcode::where('bar_code', 'LIKE', '%' . $searchKey . '%')
@@ -671,7 +671,7 @@ class ProductController extends Controller
         // }
 
         foreach ($productInfos as $productInfo) {
-            $mergeImgPath = 'https://www.cuahangcuatoi.net/bkrm-api/storage/app/public/';
+            $mergeImgPath = 'http://' . env('IMAGE_PREFIX') . '/bkrm-api/storage/app/public/';
 
             $img_url =  $mergeImgPath . $productInfo['image_url'];
             array_push($data, [
@@ -922,7 +922,7 @@ class ProductController extends Controller
 
             $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
             $sized_image->save();
-            $imageUrl = 'https://www.cuahangcuatoi.net/bkrm-api/storage/app/public/'
+            $imageUrl = 'http://' . env('IMAGE_PREFIX') . '/bkrm-api/storage/app/public/'
                 . $imagePath;
             array_push($imageUrls, $imageUrl);
         }
