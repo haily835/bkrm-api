@@ -18,7 +18,8 @@ B. HOW TO RUN THIS CODE
 2. Steps to run this code for the first time.
 For automatically setup for window you can run setup.bat file.
 For set up manually:
-- Create a copy of ```.env.sample``` and named it ```.env```
+- In root folder Create a copy of ```.env.sample``` and named it ```.env```
+- Download merge.zip and extract it to a folder *merged* in the root folder
 - Build the app image with the following command
 ```docker-compose build app```
 - Run the environment in background mode

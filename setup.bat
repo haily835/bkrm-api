@@ -1,4 +1,4 @@
-copy .env.sample .env
+copy .env.example .env
 docker-compose build app
 docker-compose up -d
 docker-compose exec app rm -rf vendor composer.lock
