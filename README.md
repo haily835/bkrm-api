@@ -15,7 +15,9 @@ B. HOW TO RUN THIS CODE
 1. Requirements
 - Docker installed: https://docs.docker.com/desktop
 
-2. Steps to run this code for the first time
+2. Steps to run this code for the first time.
+For automatically setup for window you can run setup.bat file.
+For set up manually:
 - Create a copy of ```.env.sample``` and named it ```.env```
 - Build the app image with the following command
 ```docker-compose build app```
