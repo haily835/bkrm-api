@@ -13,7 +13,7 @@ services:
     working_dir: /var/www/
     volumes:
       - ./:/var/www
-      - ./uploaded_images:/var/www/storage/app/public/uploaded_images
+      - ./uploaded-images:/var/www/storage/app/public/uploaded-images
       - ./merged:/var/www/storage/app/public/merged
     networks:
       - bkrm
@@ -30,7 +30,7 @@ services:
       SERVICE_NAME: mysql
     volumes:
       - ./docker-compose/mariadb:/docker-entrypoint-initdb.d
-      - ./bkrm_persist_data:/var/lib/mysql
+      - ./bkrm-persist-data:/var/lib/mysql
     networks:
       - bkrm
   nginx:
@@ -42,7 +42,7 @@ services:
     volumes:
       - ./:/var/www
       - ./docker-compose/nginx:/etc/nginx/conf.d
-      - ./uploaded_images:/var/www/storage/app/public/uploaded_images
+      - ./uploaded-images:/var/www/storage/app/public/uploaded-images
       - ./merged:/var/www/storage/app/public/merged
     networks:
       - bkrm
