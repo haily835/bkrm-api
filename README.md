@@ -1,5 +1,5 @@
 ***BKRM API - Bach Khoa Retail Management System API***
-_Updated at : 22 Oct 2022 by Hai Ly._
+- _Updated at : 22 Oct 2022 by Hai Ly._
 
 A. INTRODUCTION
 This is backend implementation of our project for graduation thesis: BUILD A RETAIL MANAGEMENT SYSTEM SUPPORTING AUTOMATION.
@@ -13,7 +13,7 @@ Members:
 
 B. HOW TO RUN THIS CODE
 1. Requirements
-Docker installed: https://docs.docker.com/desktop
+- Docker installed: https://docs.docker.com/desktop
 
 2. Steps to run this code for the first time
 - Create a copy of ```.env.sample``` and named it ```.env```
@@ -35,10 +35,11 @@ Finally you now can access BKRM backend through:
 - http://localhost:8000/api
 
 3. Code changes are automatically sync with the deploy code in the container
-3. Restart when updating docker-compose.yml or Dockerfile
+
+4. Restart when updating docker-compose.yml or Dockerfile
 ```docker-compose up -d```
 
-4. Database persistence folder:
+5. Database persistence folder:
 - Database on a run session is store in folder bkrm_persistent_data.
 - If you delete this folder, the database will be refreshed back to the init_db.sql in docker_composer/mariadb
 
