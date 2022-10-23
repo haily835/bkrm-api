@@ -1,7 +1,6 @@
 <?php
 
 namespace App\Http\Controllers;
-
 use App\Models\BranchInventory;
 use App\Models\PurchaseOrderDetail;
 use Illuminate\Http\Request;
@@ -16,6 +15,8 @@ use App\Models\Barcode;
 use App\Models\InventoryCheckDetail;
 use Illuminate\Support\Facades\Validator;
 use DateTime;
+use Illuminate\Support\Facades\Storage;
+use App\Http\Controllers\Util;
 
 function Quartile($Array, $Quartile) {
     sort($Array);
@@ -553,39 +554,10 @@ class ProductController extends Controller
         if (array_key_exists('images', $data)) {
             if ($data['images'] != null) {
                 foreach ($data['images'] as $image) {
-                    $imagePath = $image->store('product-images', 'public');
-
-                    $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
-                    $sized_image->save();
-                    $imageUrl = 'http://103.163.118.100/bkrm-api/storage/app/public/'
-                        . $imagePath;
-
-                    // DB::table('images')->insert([
-                    //     'uuid' => (string) Str::uuid(),
-                    //     'url' => $imageUrl,
-                    //     'store_id' => $store->id,
-                    //     'entity_uuid' => $product['uuid'],
-                    //     'image_type' => 'product'
-                    // ]);
-
-                    array_push($imageUrls, $imageUrl);
+                    array_push($imageUrls, Util::saveImage($image, 'product-images'));
                 }
             }
         }
-
-
-        /// if no product images set to the default
-        // if (DB::table('images')->where('entity_uuid', $product->uuid)->count() === 0) {
-        //     array_push($imageUrls, 'http://103.163.118.100/bkrm-api/storage/app/public/product-images/product-default.png');
-
-        //     DB::table('images')->insert([
-        //         'uuid' => (string) Str::uuid(),
-        //         'url' => 'http://103.163.118.100/bkrm-api/storage/app/public/product-images/product-default.png',
-        //         'store_id' => $store->id,
-        //         'entity_uuid' => $product->uuid,
-        //         'image_type' => 'product'
-        //     ]);
-        // }
 
         if ($data['list_price'] != $product['list_price']) {
             DB::table('product_prices')->insert([
@@ -651,7 +623,7 @@ class ProductController extends Controller
 
         $data = [];
         $productInfos = [];
-        $mergeImgPath = 'https://www.cuahangcuatoi.net/bkrm-api/storage/app/public/';
+        $mergeImgPath = 'http://' . env('IMAGE_PREFIX') . '/bkrm-api/storage/app/public/';
 
         if ($searchKey) {
             $productInfos = Barcode::where('bar_code', 'LIKE', '%' . $searchKey . '%')
@@ -671,9 +643,7 @@ class ProductController extends Controller
         // }
 
         foreach ($productInfos as $productInfo) {
-            $mergeImgPath = 'https://www.cuahangcuatoi.net/bkrm-api/storage/app/public/';
-
-            $img_url =  $mergeImgPath . $productInfo['image_url'];
+            $img_url =  env('APP_URL') . Storage::url('') . $productInfo['image_url'];
             array_push($data, [
                 'name' => $productInfo['product_name'],
                 'img_url' => $img_url,
@@ -695,7 +665,7 @@ class ProductController extends Controller
             $validatedResult = $this->validateNewProduct($product, $store->id);
             if ($validatedResult) {
                 array_push(
-                    $messages, 
+                    $messages,
                     array_merge($this->validateNewProduct($product, $store->id), ['row' => $key])
                 );
             }
@@ -735,10 +705,9 @@ class ProductController extends Controller
                     }
                 }
             }
-            
             unset($product['img_urls']);
             array_push(
-                $messages, 
+                $messages,
                 $this->createUpdateProduct($product, $store->id, $branch->id, [], $image_urls ? $image_urls : [], null)
             );
         }
@@ -918,13 +887,9 @@ class ProductController extends Controller
 
         $imageUrls = $image_urls;
         foreach ($images as $image) {
-            $imagePath = $image->store('product-images', 'public');
-
-            $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
-            $sized_image->save();
-            $imageUrl = 'https://www.cuahangcuatoi.net/bkrm-api/storage/app/public/'
-                . $imagePath;
-            array_push($imageUrls, $imageUrl);
+            array_push(
+                $imageUrls, 
+                Util::saveImage($image, 'product-images'));
         }
 
         if ($product_id) {

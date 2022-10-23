@@ -6,7 +6,7 @@ use App\Models\Store;
 use App\Models\Customer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use Intervention\Image\Facades\Image;
+use App\Http\Controllers\Util;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 
@@ -145,12 +145,8 @@ class CustomerController extends Controller
         $imagePath = "";
         if (array_key_exists('image', $validated)) {
             if ($validated['image'] != null) {
-                $imagePath = $validated['image']->store('customer-images', 'public');
-                $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
-                $sized_image->save();
+                $imagePath = Util::saveImage($validated['image'], 'customer-images')
             }
-        } else {
-            $imagePath = 'http://103.163.118.100/bkrm-api/storage/app/public/customer-images/customer-default.png';
         }
 
         $last_id = count($store->customers);

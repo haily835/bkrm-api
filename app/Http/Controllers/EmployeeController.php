@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Intervention\Image\Facades\Image;
 use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\Util;
 
 class EmployeeController extends Controller
 {
@@ -51,11 +52,7 @@ class EmployeeController extends Controller
             'image' => 'required',
             'oldImageUrl' => 'required',
         ]);
-
-        $imagePath = $fields['image']->store('employee-images', 'public');
-        $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
-        $sized_image->save();
-
+        $imagePath = Util::saveImage($fields['image'], 'employee-images')
         /// to do delete old image
         $employee->update(['img_url' => $imagePath]);
 
@@ -94,10 +91,7 @@ class EmployeeController extends Controller
         $imagePath = "";
         if (array_key_exists('image', $fields)) {
             if ($fields['image'] != "") {
-                $imagePath = $fields['image']->store('employee-images', 'public');
-                $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
-                $sized_image->save();
-                $imagePath = 'https://www.cuahangcuatoi.net/bkrm-api/storage/app/public/' . $imagePath;
+                $imagePath = Util::saveImage($fields['image'], 'employee-images')
             }
         }
 
@@ -194,10 +188,7 @@ class EmployeeController extends Controller
         }
         // change image
         if (array_key_exists('image', $fields)) {
-            $imagePath = $fields['image']->store('employee-images', 'public');
-            $sized_image = Image::make(public_path("storage/{$imagePath}"))->fit(1000, 1000);
-            $sized_image->save();
-            $imagePath = 'https://www.cuahangcuatoi.net/bkrm-api/storage/app/public/' . $imagePath;
+            $imagePath = Util::saveImage($fields['image'], 'employee-images')
             $employee->update(['img_url' => $imagePath]);
         }
 
