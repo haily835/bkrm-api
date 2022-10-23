@@ -16,6 +16,7 @@ B. HOW TO RUN THIS CODE
 Docker installed: https://docs.docker.com/desktop
 
 2. Steps to run this code for the first time
+- Create a copy of ```.env.sample``` and named it ```.env```
 - Build the app image with the following command
 ```docker-compose build app```
 - Run the environment in background mode
