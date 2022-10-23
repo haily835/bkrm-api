@@ -145,7 +145,7 @@ class CustomerController extends Controller
         $imagePath = "";
         if (array_key_exists('image', $validated)) {
             if ($validated['image'] != null) {
-                $imagePath = Util::saveImage($validated['image'], 'customer-images')
+                $imagePath = Util::saveImage($validated['image'], 'customer-images');
             }
         }
 

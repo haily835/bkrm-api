@@ -52,7 +52,7 @@ class EmployeeController extends Controller
             'image' => 'required',
             'oldImageUrl' => 'required',
         ]);
-        $imagePath = Util::saveImage($fields['image'], 'employee-images')
+        $imagePath = Util::saveImage($fields['image'], 'employee-images');
         /// to do delete old image
         $employee->update(['img_url' => $imagePath]);
 
@@ -188,7 +188,7 @@ class EmployeeController extends Controller
         }
         // change image
         if (array_key_exists('image', $fields)) {
-            $imagePath = Util::saveImage($fields['image'], 'employee-images')
+            $imagePath = Util::saveImage($fields['image'], 'employee-images');
             $employee->update(['img_url' => $imagePath]);
         }
 
