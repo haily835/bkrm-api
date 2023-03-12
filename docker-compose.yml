@@ -31,6 +31,8 @@ services:
     volumes:
       - ./docker-compose/mariadb:/docker-entrypoint-initdb.d
       - ./bkrm-persist-data:/var/lib/mysql
+    ports:
+      - 3306:8001
     networks:
       - bkrm
   nginx:
