@@ -21,18 +21,19 @@ For set up manually:
 - In root folder Create a copy of ```.env.sample``` and named it ```.env```
 - Download merge.zip and extract it to a folder *merged* in the root folder
 - Build the app image with the following command
-```docker-compose build app```
+- docker-compose may be docker compose (if use docker utils)
+```docker compose build app```
 - Run the environment in background mode
-```docker-compose up -d```
+```docker compose up -d```
 - (Optional) Show information about the state of your active service
-```docker-compose ps```
+```docker compose ps```
 - Run composer install to install the application dependencies.
-```docker-compose exec app rm -rf vendor composer.lock```
-```docker-compose exec app composer install```
+```docker compose exec app rm -rf vendor composer.lock```
+```docker compose exec app composer install```
 - Generate a unique application key with the artisan Laravel command-line tool.
-```docker-compose exec app php artisan key:generate```
+```docker compose exec app php artisan key:generate```
 - Link storage to update images
-```docker-compose exec app php artisan storage:link```
+```docker compose exec app php artisan storage:link```
 Finally you now can access BKRM backend through:
 - http://server_domain_or_IP:8000/api
 - http://localhost:8000/api
@@ -64,3 +65,4 @@ https://docs.docker.com/compose/reference/
 
 C. CODE STRUCTURE:
 An general explaination of the meaning of main folder and files. For detail, please read Laravel Docs
+

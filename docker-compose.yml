@@ -2,9 +2,6 @@ version: "3.7"
 services:
   app:
     build:
-      args:
-        user: bkrm
-        uid: 1000
       context: ./
       dockerfile: Dockerfile
     image: bkrm
@@ -36,6 +33,10 @@ services:
     networks:
       - bkrm
   nginx:
+    build:
+      args:
+        user: bkrm
+        uid: 1000
     image: nginx:1.17-alpine
     container_name: bkrm-nginx
     restart: unless-stopped
